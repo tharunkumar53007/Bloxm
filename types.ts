@@ -11,6 +11,7 @@ export interface BlockData {
   url?: string;
   imageUrl?: string;
   iconName?: string; // For Lucide icons
+  faviconUrl?: string; // For custom website favicons
   status?: string;
   tags?: string[];
   lastUpdated?: number;

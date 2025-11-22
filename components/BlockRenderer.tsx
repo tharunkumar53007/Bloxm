@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { BlockData } from '../types';
 import { 
@@ -89,10 +90,18 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
         <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
         
         {/* Icon */}
-        {Icon && (
-          <Icon 
-            className={`w-10 h-10 mb-2 transition-transform duration-300 relative z-10 group-hover:scale-110 ${hasBanner ? 'text-white drop-shadow-lg' : brandColorClass}`} 
-          />
+        {block.faviconUrl ? (
+            <img 
+              src={block.faviconUrl} 
+              alt="Icon"
+              className={`w-10 h-10 mb-2 object-contain relative z-10 transition-transform duration-300 group-hover:scale-110 drop-shadow-md rounded-md`}
+            />
+        ) : (
+            Icon && (
+              <Icon 
+                className={`w-10 h-10 mb-2 transition-transform duration-300 relative z-10 group-hover:scale-110 ${hasBanner ? 'text-white drop-shadow-lg' : brandColorClass}`} 
+              />
+            )
         )}
         
         <span className={`text-sm font-semibold text-zinc-300 group-hover:text-white transition-colors relative z-10 drop-shadow-md text-center line-clamp-2 ${hasTags ? 'mb-1' : ''}`}>

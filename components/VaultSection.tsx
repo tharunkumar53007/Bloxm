@@ -1,8 +1,8 @@
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, Pencil, Check, Search } from 'lucide-react';
+import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, SquarePen, Check, Search, CheckCircle2, Type, Image as ImageIcon, Upload } from 'lucide-react';
 import { BlockData, VaultFolder, BlockType, ThemeConfig } from '../types';
 import { BentoItem } from './BentoItem';
-import { BlockEditorModal } from './BlockEditorModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
 interface VaultSectionProps {
@@ -11,10 +11,19 @@ interface VaultSectionProps {
   onUpdateFolders: (folders: VaultFolder[]) => void;
   theme: ThemeConfig;
   isSharedMode?: boolean;
+  openFolderId: string | null;
+  onOpenFolder: (id: string | null) => void;
 }
 
-export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, onUpdateFolders, theme, isSharedMode = false }) => {
-  const [openFolderId, setOpenFolderId] = useState<string | null>(null);
+export const VaultSection: React.FC<VaultSectionProps> = ({ 
+  folders, 
+  isEditing, 
+  onUpdateFolders, 
+  theme, 
+  isSharedMode = false,
+  openFolderId,
+  onOpenFolder
+}) => {
   const [authFolderId, setAuthFolderId] = useState<string | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState(false);
@@ -41,6 +50,10 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
   // Inside Vault State
   const [editingBlock, setEditingBlock] = useState<BlockData | null>(null);
   const [blockToDelete, setBlockToDelete] = useState<string | null>(null);
+  
+  // Multi-select State
+  const [selectedVaultItemIds, setSelectedVaultItemIds] = useState<string[]>([]);
+  const [isBulkDeleteVault, setIsBulkDeleteVault] = useState(false);
 
   // Folder Deletion State
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
@@ -53,6 +66,14 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
         setSearchQuery('');
     }
   }, [openFolderId]);
+
+  // Clear selection when exiting edit mode or closing folder
+  useEffect(() => {
+    if (!openFolderId || !isVaultEditing) {
+        setSelectedVaultItemIds([]);
+        setIsBulkDeleteVault(false);
+    }
+  }, [openFolderId, isVaultEditing]);
 
   const getBackgroundStyle = () => {
     if (theme.type === 'image') {
@@ -112,7 +133,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
   const confirmDeleteFolder = () => {
     if (folderToDelete) {
       onUpdateFolders(folders.filter(f => f.id !== folderToDelete));
-      if (openFolderId === folderToDelete) setOpenFolderId(null);
+      if (openFolderId === folderToDelete) onOpenFolder(null);
       setFolderToDelete(null);
     }
   };
@@ -124,7 +145,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
       setPasswordInput('');
       setAuthError(false);
     } else {
-      setOpenFolderId(folder.id);
+      onOpenFolder(folder.id);
     }
   };
 
@@ -132,7 +153,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
     e.preventDefault();
     const folder = folders.find(f => f.id === authFolderId);
     if (folder && folder.password === passwordInput) {
-      setOpenFolderId(folder.id);
+      onOpenFolder(folder.id);
       setAuthFolderId(null);
     } else {
       setAuthError(true);
@@ -145,7 +166,6 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
     onUpdateFolders(folders.map(f => f.id === folderId ? { ...f, items: newItems } : f));
   };
 
-  // This is triggered by the Modal now
   const handleAddBlockData = (blockData: BlockData) => {
     if (!activeFolder) return;
     updateFolderItems(activeFolder.id, [...activeFolder.items, blockData]);
@@ -155,9 +175,22 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
     setBlockToDelete(id);
   };
 
+  const handleBulkDeleteTrigger = () => {
+    setIsBulkDeleteVault(true);
+    setBlockToDelete('BULK');
+  };
+
   const confirmRemoveBlock = () => {
-    if (!activeFolder || !blockToDelete) return;
-    updateFolderItems(activeFolder.id, activeFolder.items.filter(b => b.id !== blockToDelete));
+    if (!activeFolder) return;
+    
+    if (isBulkDeleteVault) {
+        const newItems = activeFolder.items.filter(b => !selectedVaultItemIds.includes(b.id));
+        updateFolderItems(activeFolder.id, newItems);
+        setSelectedVaultItemIds([]);
+        setIsBulkDeleteVault(false);
+    } else if (blockToDelete) {
+        updateFolderItems(activeFolder.id, activeFolder.items.filter(b => b.id !== blockToDelete));
+    }
     setBlockToDelete(null);
   };
 
@@ -190,6 +223,21 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
     newBlocks.splice(hoverIndex, 0, draggedItem);
     updateFolderItems(activeFolder.id, newBlocks);
   }, [activeFolder, onUpdateFolders]);
+
+  const handleVaultItemInteraction = (id: string, isModifierPressed: boolean) => {
+    if (!isVaultEditing) return;
+
+    if (isModifierPressed || selectedVaultItemIds.length > 0) {
+       setSelectedVaultItemIds(prev => {
+         if (prev.includes(id)) return prev.filter(i => i !== id);
+         return [...prev, id];
+       });
+    } else {
+       // Open editor
+       const block = activeFolder?.items.find(b => b.id === id);
+       if (block) setEditingBlock(block);
+    }
+  };
 
   // Filter items based on search query
   const filteredItems = useMemo(() => {
@@ -374,7 +422,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
         </div>
       )}
       
-      {/* Delete Folder Modal - Moved outside of inner browser conditional */}
+      {/* Delete Folder Modal */}
       <DeleteConfirmModal 
         isOpen={!!folderToDelete}
         onClose={() => setFolderToDelete(null)}
@@ -401,7 +449,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
            {/* Header */}
            <div className="pt-8 pb-4 px-4 md:px-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between bg-[#09090b]/30 backdrop-blur-xl sticky top-0 z-50 shadow-lg gap-4">
               <div className="flex items-center gap-4 relative z-10 flex-shrink-0">
-                  <button onClick={() => setOpenFolderId(null)} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white">
+                  <button onClick={() => onOpenFolder(null)} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white">
                      <ArrowRight className="w-6 h-6 rotate-180" />
                   </button>
                   <div>
@@ -436,12 +484,24 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
                         <div className="h-6 w-px bg-white/10 hidden md:block" />
 
                         <div className="flex items-center gap-2 flex-shrink-0">
+                            
+                            {/* Multi-Select Delete Trigger in Header */}
+                            {isVaultEditing && selectedVaultItemIds.length > 0 && (
+                                <button
+                                    onClick={handleBulkDeleteTrigger}
+                                    className="p-2.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)] animate-in zoom-in mr-1"
+                                    title={`Delete ${selectedVaultItemIds.length} Items`}
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                </button>
+                            )}
+
                             <button 
                                 onClick={() => setIsVaultEditing(!isVaultEditing)}
                                 className={`p-2.5 rounded-full transition-all ${isVaultEditing ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}
                                 title="Toggle Edit Mode"
                             >
-                                {isVaultEditing ? <Check className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
+                                {isVaultEditing ? <Check className="w-5 h-5" /> : <SquarePen className="w-5 h-5" />}
                             </button>
                             
                             <button 
@@ -465,11 +525,13 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
                        key={block.id}
                        block={block}
                        isEditing={isVaultEditing && !isSharedMode} 
+                       isSelected={selectedVaultItemIds.includes(block.id)}
                        onRemove={handleRemoveBlock}
                        onResize={handleResizeBlock}
                        onEditContent={setEditingBlock}
                        onMove={handleMoveBlock}
                        onUpdate={(id, updates) => handleUpdateBlock({ ...block, ...updates, id } as BlockData)}
+                       onToggleSelect={handleVaultItemInteraction}
                     />
                  ))}
                  {filteredItems?.length === 0 && (
@@ -497,7 +559,8 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
              onAdd={handleAddBlockData}
            />
            
-           <BlockEditorModal 
+           {/* Replaced generic BlockEditorModal with Vault-specific one */}
+           <VaultEditItemModal 
               isOpen={!!editingBlock}
               block={editingBlock}
               onClose={() => setEditingBlock(null)}
@@ -506,8 +569,9 @@ export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, 
            
            <DeleteConfirmModal 
               isOpen={!!blockToDelete}
-              onClose={() => setBlockToDelete(null)}
+              onClose={() => { setBlockToDelete(null); setIsBulkDeleteVault(false); }}
               onConfirm={confirmRemoveBlock}
+              count={isBulkDeleteVault ? selectedVaultItemIds.length : 1}
            />
         </div>
       )}
@@ -538,62 +602,90 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
         return;
     }
 
-    if (title) return;
+    // Prevent overwriting if user has typed a custom title
+    if (title.trim()) return;
 
+    const controller = new AbortController();
+    
     const debounceTimer = setTimeout(async () => {
        setIsFetching(true);
+       let fetchedTitle = null;
+       
        try {
-          // 1. Try NoEmbed (Best for standard OEmbed providers like YouTube, Vimeo, Reddit)
-          const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
-          const data = await res.json();
-          
-          if (data.title && !data.error) {
-              setTitle(data.title);
-          } else {
-              // 2. Fallback to Microlink (Best for Instagram, Facebook, TikTok, Twitter, General meta tags)
-              const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
-              const microData = await microRes.json();
-              
-              if (microData.status === 'success' && microData.data.title) {
-                  setTitle(microData.data.title);
-              } else {
-                  runHeuristic(url);
-              }
-          }
-       } catch (error) {
-           // Network error on NoEmbed, try Microlink
-           try {
-              const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
-              const microData = await microRes.json();
-              if (microData.status === 'success' && microData.data.title) {
-                  setTitle(microData.data.title);
-              } else {
-                  runHeuristic(url);
-              }
-           } catch (e) {
-              runHeuristic(url);
-           }
-       } finally {
-          setIsFetching(false);
-       }
-    }, 800);
+          const targetUrl = url.toLowerCase();
+          const isOembedProvider = targetUrl.includes('youtube.com') || 
+                                   targetUrl.includes('youtu.be') || 
+                                   targetUrl.includes('vimeo.com') || 
+                                   targetUrl.includes('twitter.com') || 
+                                   targetUrl.includes('x.com') ||
+                                   targetUrl.includes('reddit.com');
 
-    return () => clearTimeout(debounceTimer);
-  }, [url, type]);
+          if (isOembedProvider) {
+              try {
+                  const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+                  const data = await res.json();
+                  if (data.title && !data.error) {
+                      fetchedTitle = data.title;
+                  }
+              } catch (e) { /* ignore */ }
+          }
+
+          if (!fetchedTitle) {
+              try {
+                  const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+                  const microData = await microRes.json();
+                  
+                  if (microData.status === 'success' && microData.data?.title) {
+                      fetchedTitle = microData.data.title;
+                  }
+              } catch (e) { /* ignore */ }
+          }
+          
+       } catch (err) {
+          // AbortError or other
+       } finally {
+          if (!controller.signal.aborted) {
+              if (fetchedTitle) {
+                  setTitle(fetchedTitle);
+              } else {
+                  runHeuristic(url);
+              }
+              setIsFetching(false);
+          }
+       }
+    }, 800); 
+
+    return () => {
+        clearTimeout(debounceTimer);
+        controller.abort();
+    };
+  }, [url, type]); 
 
   const runHeuristic = (val: string) => {
-     if (val.includes('youtube') || val.includes('youtu.be')) setTitle('YouTube Video');
-     else if (val.includes('vimeo')) setTitle('Vimeo Video');
-     else if (val.includes('tiktok')) setTitle('TikTok Post');
-     else if (val.includes('twitter') || val.includes('x.com')) setTitle('Social Post');
-     else if (val.includes('instagram')) setTitle('Instagram Post');
-     else if (val.includes('facebook')) setTitle('Facebook Post');
-     else if (val.length > 8) {
-       try {
-         const domain = new URL(val).hostname.replace('www.', '').split('.')[0];
-         setTitle(domain.charAt(0).toUpperCase() + domain.slice(1));
-       } catch (e) { /* ignore */ }
+     let fallback = 'Link Item';
+     const lower = val.toLowerCase();
+     
+     if (lower.includes('youtube') || lower.includes('youtu.be')) fallback = 'YouTube Video';
+     else if (lower.includes('vimeo')) fallback = 'Vimeo Video';
+     else if (lower.includes('tiktok')) fallback = 'TikTok Post';
+     else if (lower.includes('twitter') || lower.includes('x.com')) fallback = 'X Post';
+     else if (lower.includes('instagram')) fallback = 'Instagram Post';
+     else if (lower.includes('facebook')) fallback = 'Facebook Post';
+     else if (lower.includes('linkedin')) fallback = 'LinkedIn Post';
+     else {
+        try {
+            const urlObj = new URL(val);
+            const domain = urlObj.hostname.replace('www.', '').split('.')[0];
+            if (domain) {
+                fallback = domain.charAt(0).toUpperCase() + domain.slice(1);
+                const path = urlObj.pathname.split('/').filter(Boolean).pop();
+                if (path && path.length > 3) {
+                   fallback += ` - ${path.replace(/-/g, ' ')}`;
+                }
+            }
+        } catch (e) { /* ignore */ }
      }
+     setTitle(fallback);
   };
 
   const handleSubmit = () => {
@@ -610,7 +702,6 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
         lastUpdated: Date.now()
       };
     } else {
-      // Video or Link
       let icon = 'globe';
       if (url.includes('youtube') || url.includes('youtu.be')) icon = 'youtube';
       else if (url.includes('vimeo')) icon = 'video';
@@ -622,6 +713,15 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
       else if (type === 'video') icon = 'video';
       else if (type === 'link') icon = 'link';
 
+      // Generate favicon URL
+      let faviconUrl;
+      try {
+        if (url) {
+            const hostname = new URL(url).hostname;
+            faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+        }
+      } catch(e) { /* ignore */ }
+
       block = {
         id,
         type: 'social',
@@ -629,13 +729,13 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
         title: title || 'Link',
         url: url,
         iconName: icon,
+        faviconUrl, // Store the generated favicon URL
         tags: tag ? [tag] : [],
         lastUpdated: Date.now()
       };
     }
 
     onAdd(block);
-    // Reset & Close
     setUrl('');
     setTag('');
     setTitle('');
@@ -739,6 +839,166 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
           </button>
         </div>
 
+      </div>
+    </div>
+  );
+};
+
+// --- Internal Component: Vault Edit Item Modal (Specific) ---
+
+interface VaultEditItemModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (updatedBlock: BlockData) => void;
+  block: BlockData | null;
+}
+
+const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, onClose, onSave, block }) => {
+  const [formData, setFormData] = useState<Partial<BlockData>>({});
+  const [tagInput, setTagInput] = useState('');
+  const [showAppearance, setShowAppearance] = useState(false);
+
+  useEffect(() => {
+    if (block) {
+      setFormData({ ...block });
+      setTagInput(block.tags ? block.tags.join(', ') : '');
+    }
+  }, [block]);
+
+  if (!isOpen || !block) return null;
+
+  const handleSave = () => {
+     const tags = tagInput.split(',').map(t => t.trim()).filter(Boolean);
+     onSave({ ...block, ...formData, tags } as BlockData);
+     onClose();
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const isNote = block.type === 'text';
+  const labelStyle = "block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest ml-1";
+  const inputStyle = "w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:bg-black/40 focus:outline-none transition-all";
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={onClose} />
+      
+      <div className="relative w-full max-w-md glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 bg-[#09090b]/90">
+        <div className="flex justify-between items-center mb-6">
+           <h3 className="text-xl font-bold text-white flex items-center gap-2">
+             Edit {isNote ? 'Note' : 'Item'}
+           </h3>
+           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><X className="w-5 h-5 text-zinc-400" /></button>
+        </div>
+
+        <div className="space-y-5">
+          {/* Title - Always shown */}
+          <div>
+            <label className={labelStyle}>Title</label>
+            <div className="relative group">
+                <Type className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                <input
+                    type="text"
+                    value={formData.title || ''}
+                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    className={`${inputStyle} pl-11`}
+                    placeholder="Item Title"
+                />
+            </div>
+          </div>
+
+          {/* URL - Only for non-notes */}
+          {!isNote && (
+            <div>
+                <label className={labelStyle}>URL Link</label>
+                <div className="relative group">
+                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                    <input
+                        type="url"
+                        value={formData.url || ''}
+                        onChange={(e) => setFormData({...formData, url: e.target.value})}
+                        className={`${inputStyle} pl-11`}
+                        placeholder="https://..."
+                    />
+                </div>
+            </div>
+          )}
+
+          {/* Content - For Notes or description */}
+          <div>
+            <label className={labelStyle}>{isNote ? 'Note Content' : 'Description (Optional)'}</label>
+            <textarea
+                value={formData.content || ''}
+                onChange={(e) => setFormData({...formData, content: e.target.value})}
+                className={`${inputStyle} h-32 resize-none`}
+                placeholder={isNote ? "Write your note..." : "Short description..."}
+            />
+          </div>
+
+          {/* Tags - Specific fix for Vault */}
+          <div>
+            <label className={labelStyle}>Tags (Comma separated)</label>
+            <div className="relative group">
+                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    className={`${inputStyle} pl-11`}
+                    placeholder="design, important, todo..."
+                />
+            </div>
+          </div>
+
+          {/* Appearance Toggle */}
+          <div className="pt-2">
+              <button 
+                onClick={() => setShowAppearance(!showAppearance)}
+                className="text-xs font-bold text-zinc-500 flex items-center gap-1 hover:text-emerald-400 transition-colors"
+              >
+                {showAppearance ? 'Hide Appearance' : 'Show Appearance'}
+              </button>
+              
+              {showAppearance && (
+                  <div className="mt-3 animate-in slide-in-from-top-2">
+                    <label className={labelStyle}>Custom Banner Image</label>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1 group">
+                            <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                            <input
+                                type="text"
+                                value={formData.imageUrl || ''}
+                                onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                                className={`${inputStyle} pl-11 py-2 text-sm`}
+                                placeholder="https://..."
+                            />
+                        </div>
+                        <label className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl w-[46px] flex items-center justify-center transition-colors group">
+                            <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                            <Upload className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400" />
+                        </label>
+                    </div>
+                  </div>
+              )}
+          </div>
+
+          <button 
+            onClick={handleSave}
+            className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
+          >
+            <Save className="w-4 h-4" />
+            Save Changes
+          </button>
+        </div>
       </div>
     </div>
   );

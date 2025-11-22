@@ -97,6 +97,7 @@ const App: React.FC = () => {
   const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<BlockData | null>(null); 
+  const [vaultOpenId, setVaultOpenId] = useState<string | null>(null);
   
   // Selection & Deletion State
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
@@ -542,23 +543,28 @@ const App: React.FC = () => {
            onUpdateFolders={setVaultFolders}
            theme={theme}
            isSharedMode={isSharedMode}
+           openFolderId={vaultOpenId}
+           onOpenFolder={setVaultOpenId}
         />
       </main>
 
-      <EditToolbar 
-        isEditing={isEditing} 
-        toggleEdit={() => setIsEditing(!isEditing)} 
-        addBlock={handleAddBlock}
-        onOpenAI={() => setIsAIModalOpen(true)}
-        onOpenTheme={() => setIsThemeModalOpen(true)}
-        onShare={handleShare}
-        isSharedMode={isSharedMode}
-        onRemix={handleRemix}
-        selectedCount={selectedBlockIds.length}
-        onClearSelection={handleClearSelection}
-        onBulkDelete={handleBulkDeleteTrigger}
-        onBulkDuplicate={handleBulkDuplicate}
-      />
+      {/* Only show EditToolbar when vault is CLOSED */}
+      {!vaultOpenId && (
+        <EditToolbar 
+          isEditing={isEditing} 
+          toggleEdit={() => setIsEditing(!isEditing)} 
+          addBlock={handleAddBlock}
+          onOpenAI={() => setIsAIModalOpen(true)}
+          onOpenTheme={() => setIsThemeModalOpen(true)}
+          onShare={handleShare}
+          isSharedMode={isSharedMode}
+          onRemix={handleRemix}
+          selectedCount={selectedBlockIds.length}
+          onClearSelection={handleClearSelection}
+          onBulkDelete={handleBulkDeleteTrigger}
+          onBulkDuplicate={handleBulkDuplicate}
+        />
+      )}
 
       <AIGenerator 
         isOpen={isAIModalOpen} 
