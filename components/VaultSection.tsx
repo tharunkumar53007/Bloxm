@@ -1,0 +1,745 @@
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, Pencil, Check, Search } from 'lucide-react';
+import { BlockData, VaultFolder, BlockType, ThemeConfig } from '../types';
+import { BentoItem } from './BentoItem';
+import { BlockEditorModal } from './BlockEditorModal';
+import { DeleteConfirmModal } from './DeleteConfirmModal';
+
+interface VaultSectionProps {
+  folders: VaultFolder[];
+  isEditing: boolean;
+  onUpdateFolders: (folders: VaultFolder[]) => void;
+  theme: ThemeConfig;
+  isSharedMode?: boolean;
+}
+
+export const VaultSection: React.FC<VaultSectionProps> = ({ folders, isEditing, onUpdateFolders, theme, isSharedMode = false }) => {
+  const [openFolderId, setOpenFolderId] = useState<string | null>(null);
+  const [authFolderId, setAuthFolderId] = useState<string | null>(null);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState(false);
+  
+  // Unified Create/Edit Modal State
+  const [folderModal, setFolderModal] = useState<{
+    isOpen: boolean;
+    mode: 'create' | 'edit';
+    folderId?: string;
+    data: Partial<VaultFolder>;
+  }>({
+    isOpen: false,
+    mode: 'create',
+    data: { type: 'public' }
+  });
+
+  // Adding Items
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const [isVaultEditing, setIsVaultEditing] = useState(false);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Inside Vault State
+  const [editingBlock, setEditingBlock] = useState<BlockData | null>(null);
+  const [blockToDelete, setBlockToDelete] = useState<string | null>(null);
+
+  // Folder Deletion State
+  const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
+
+  const activeFolder = folders.find(f => f.id === openFolderId);
+
+  useEffect(() => {
+    if (!openFolderId) {
+        setIsVaultEditing(false);
+        setSearchQuery('');
+    }
+  }, [openFolderId]);
+
+  const getBackgroundStyle = () => {
+    if (theme.type === 'image') {
+       return {
+         backgroundImage: `url(${theme.value})`,
+         backgroundSize: 'cover',
+         backgroundPosition: 'center',
+       };
+    }
+    return { background: theme.value };
+  };
+
+  // --- Folder Management ---
+
+  const handleOpenCreate = () => {
+    setFolderModal({
+      isOpen: true,
+      mode: 'create',
+      data: { type: 'public', name: '', password: '' }
+    });
+  };
+
+  const handleOpenEdit = (folder: VaultFolder) => {
+    setFolderModal({
+      isOpen: true,
+      mode: 'edit',
+      folderId: folder.id,
+      data: { ...folder }
+    });
+  };
+
+  const handleSaveFolder = () => {
+    const { mode, data, folderId } = folderModal;
+    if (!data.name) return;
+
+    if (mode === 'create') {
+      const newFolder: VaultFolder = {
+        id: Date.now().toString(),
+        name: data.name,
+        type: data.type || 'public',
+        password: data.password,
+        items: [],
+        description: data.description || 'A collection of hidden gems.'
+      };
+      onUpdateFolders([...folders, newFolder]);
+    } else if (mode === 'edit' && folderId) {
+      onUpdateFolders(folders.map(f => f.id === folderId ? { ...f, ...data } as VaultFolder : f));
+    }
+
+    setFolderModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleDeleteFolder = (id: string) => {
+    setFolderToDelete(id);
+  };
+
+  const confirmDeleteFolder = () => {
+    if (folderToDelete) {
+      onUpdateFolders(folders.filter(f => f.id !== folderToDelete));
+      if (openFolderId === folderToDelete) setOpenFolderId(null);
+      setFolderToDelete(null);
+    }
+  };
+
+  const handleFolderClick = (folder: VaultFolder) => {
+    if (isEditing) return; // Don't open when editing layout
+    if (folder.type === 'private') {
+      setAuthFolderId(folder.id);
+      setPasswordInput('');
+      setAuthError(false);
+    } else {
+      setOpenFolderId(folder.id);
+    }
+  };
+
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const folder = folders.find(f => f.id === authFolderId);
+    if (folder && folder.password === passwordInput) {
+      setOpenFolderId(folder.id);
+      setAuthFolderId(null);
+    } else {
+      setAuthError(true);
+    }
+  };
+
+  // --- Inner Block Management ---
+
+  const updateFolderItems = (folderId: string, newItems: BlockData[]) => {
+    onUpdateFolders(folders.map(f => f.id === folderId ? { ...f, items: newItems } : f));
+  };
+
+  // This is triggered by the Modal now
+  const handleAddBlockData = (blockData: BlockData) => {
+    if (!activeFolder) return;
+    updateFolderItems(activeFolder.id, [...activeFolder.items, blockData]);
+  };
+
+  const handleRemoveBlock = (id: string) => {
+    setBlockToDelete(id);
+  };
+
+  const confirmRemoveBlock = () => {
+    if (!activeFolder || !blockToDelete) return;
+    updateFolderItems(activeFolder.id, activeFolder.items.filter(b => b.id !== blockToDelete));
+    setBlockToDelete(null);
+  };
+
+  const handleUpdateBlock = (updatedBlock: BlockData) => {
+    if (!activeFolder) return;
+    const blockWithTime = { ...updatedBlock, lastUpdated: Date.now() };
+    updateFolderItems(activeFolder.id, activeFolder.items.map(b => b.id === updatedBlock.id ? blockWithTime : b));
+  };
+
+  const handleResizeBlock = (id: string) => {
+    if (!activeFolder) return;
+    const sizes = ['1x1', '2x1', '2x2', '1x2'];
+    updateFolderItems(activeFolder.id, activeFolder.items.map(b => {
+      if (b.id !== id) return b;
+      const currentIndex = sizes.indexOf(b.size);
+      const nextSize = currentIndex !== -1 ? sizes[(currentIndex + 1) % sizes.length] : '1x1';
+      return { ...b, size: nextSize };
+    }));
+  };
+
+  const handleMoveBlock = useCallback((dragId: string, hoverId: string) => {
+    if (!activeFolder) return;
+    const prev = activeFolder.items;
+    const dragIndex = prev.findIndex(b => b.id === dragId);
+    const hoverIndex = prev.findIndex(b => b.id === hoverId);
+    if (dragIndex < 0 || hoverIndex < 0 || dragIndex === hoverIndex) return;
+    
+    const newBlocks = [...prev];
+    const [draggedItem] = newBlocks.splice(dragIndex, 1);
+    newBlocks.splice(hoverIndex, 0, draggedItem);
+    updateFolderItems(activeFolder.id, newBlocks);
+  }, [activeFolder, onUpdateFolders]);
+
+  // Filter items based on search query
+  const filteredItems = useMemo(() => {
+    return activeFolder?.items.filter(item => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (item.title?.toLowerCase().includes(q)) ||
+        (item.content?.toLowerCase().includes(q)) ||
+        (item.tags?.some(tag => tag.toLowerCase().includes(q)))
+      );
+    }) || [];
+  }, [activeFolder?.items, searchQuery]);
+
+  return (
+    <div className="mt-24 mb-20 animate-in fade-in slide-in-from-bottom-10 duration-700">
+      {/* Liquid Line */}
+      <div className="relative w-full h-px my-12">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50" />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400 to-transparent blur-[2px] opacity-30 animate-pulse" />
+      </div>
+
+      {/* Vault Header */}
+      <div className="flex items-center justify-between mb-8 px-2">
+        <h2 className="text-4xl font-bold text-white flex items-center gap-3 text-glow">
+          <Shield className="w-8 h-8 text-emerald-400" />
+          Vault
+        </h2>
+        {isEditing && !isSharedMode && (
+          <button 
+            onClick={handleOpenCreate}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 text-emerald-400 text-sm font-medium transition-all border border-white/5 hover:border-emerald-500/30"
+          >
+            <Plus className="w-4 h-4" />
+            New Folder
+          </button>
+        )}
+      </div>
+
+      {/* Folders Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {folders.map(folder => (
+          <div 
+            key={folder.id}
+            onClick={() => handleFolderClick(folder)}
+            className={`
+              group relative aspect-[4/3] glass-panel rounded-3xl p-6 flex flex-col justify-between
+              transition-all duration-300 
+              ${isEditing && !isSharedMode ? 'cursor-default' : 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_30px_-5px_rgba(16,185,129,0.15)]'}
+            `}
+          >
+            <div className="flex justify-between items-start">
+              <div className={`p-3 rounded-2xl ${folder.type === 'private' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'} group-hover:scale-110 transition-transform duration-500`}>
+                {folder.type === 'private' ? <Lock className="w-6 h-6" /> : <Folder className="w-6 h-6" />}
+              </div>
+              {isEditing && !isSharedMode && (
+                <div className="flex gap-1">
+                   <button 
+                    onClick={(e) => { e.stopPropagation(); handleOpenEdit(folder); }}
+                    className="p-2 rounded-full hover:bg-white/10 text-zinc-500 hover:text-emerald-400 transition-colors"
+                    title="Folder Settings"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
+                    className="p-2 rounded-full hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h3 className="text-white font-bold text-lg tracking-tight group-hover:text-emerald-300 transition-colors">{folder.name}</h3>
+              <p className="text-zinc-500 text-xs font-medium mt-1 truncate">{folder.items.length} items</p>
+            </div>
+
+            {/* Folder Glow */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${folder.type === 'private' ? 'from-red-500/5' : 'from-blue-500/5'} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-3xl`} />
+          </div>
+        ))}
+
+        {folders.length === 0 && !folderModal.isOpen && (
+           <div className="col-span-full text-center py-12 border border-dashed border-zinc-800 rounded-3xl bg-black/20">
+              <FolderOpen className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+              <p className="text-zinc-500 text-sm">Vault is empty. {isEditing && !isSharedMode ? 'Create a folder to start.' : ''}</p>
+           </div>
+        )}
+      </div>
+
+      {/* Unified Folder Modal (Create/Edit) */}
+      {folderModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setFolderModal(prev => ({ ...prev, isOpen: false }))} />
+          <div className="relative w-full max-w-md glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+             <h3 className="text-xl font-bold text-white mb-6">
+               {folderModal.mode === 'create' ? 'New Vault Folder' : 'Edit Folder Settings'}
+             </h3>
+             <div className="space-y-4">
+               <div>
+                 <label className="text-xs font-bold text-zinc-500 uppercase ml-1">Folder Name</label>
+                 <input 
+                    type="text" 
+                    value={folderModal.data.name || ''}
+                    onChange={e => setFolderModal(prev => ({ ...prev, data: { ...prev.data, name: e.target.value } }))}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none mt-1"
+                    placeholder="e.g. Secret Plans"
+                    autoFocus
+                 />
+               </div>
+               
+               <div className="flex gap-4">
+                  <button 
+                    onClick={() => setFolderModal(prev => ({ ...prev, data: { ...prev.data, type: 'public' } }))}
+                    className={`flex-1 py-3 rounded-xl border ${folderModal.data.type === 'public' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'border-white/5 text-zinc-500 hover:bg-white/5'} font-medium transition-all`}
+                  >
+                    Public
+                  </button>
+                  <button 
+                    onClick={() => setFolderModal(prev => ({ ...prev, data: { ...prev.data, type: 'private' } }))}
+                    className={`flex-1 py-3 rounded-xl border ${folderModal.data.type === 'private' ? 'bg-red-500/20 border-red-500 text-red-400' : 'border-white/5 text-zinc-500 hover:bg-white/5'} font-medium transition-all`}
+                  >
+                    Private
+                  </button>
+               </div>
+
+               {folderModal.data.type === 'private' && (
+                 <div className="animate-in slide-in-from-top-2">
+                    <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
+                      {folderModal.mode === 'edit' ? 'Set/Update Password' : 'Set Password'}
+                    </label>
+                    <input 
+                        type="text" // Visible text for easier setting
+                        value={folderModal.data.password || ''}
+                        onChange={e => setFolderModal(prev => ({ ...prev, data: { ...prev.data, password: e.target.value } }))}
+                        className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-red-500/50 focus:outline-none mt-1"
+                        placeholder="Required for access"
+                    />
+                 </div>
+               )}
+
+               <button 
+                  onClick={handleSaveFolder}
+                  disabled={!folderModal.data.name || (folderModal.data.type === 'private' && !folderModal.data.password)}
+                  className="w-full py-4 mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                  {folderModal.mode === 'create' ? 'Create Folder' : 'Save Changes'}
+               </button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auth Modal */}
+      {authFolderId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setAuthFolderId(null)} />
+          <div className="relative w-full max-w-sm glass-panel rounded-[2.5rem] p-8 border border-white/10 border-t-red-500/20 shadow-2xl animate-in zoom-in-95">
+             <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Lock className="w-8 h-8 text-red-400" />
+             </div>
+             <h3 className="text-xl font-bold text-white text-center mb-2">Locked Vault</h3>
+             <p className="text-zinc-400 text-center text-sm mb-6">Enter password to access this folder.</p>
+             
+             <form onSubmit={handleAuthSubmit}>
+                <input 
+                    type="password" 
+                    value={passwordInput}
+                    onChange={e => { setPasswordInput(e.target.value); setAuthError(false); }}
+                    className={`w-full bg-black/20 border ${authError ? 'border-red-500' : 'border-white/10'} rounded-xl p-3 text-white focus:outline-none text-center tracking-widest mb-4`}
+                    placeholder="••••••"
+                    autoFocus
+                />
+                {authError && <p className="text-red-400 text-xs text-center mb-4">Incorrect password</p>}
+                <button type="submit" className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200">
+                    Unlock
+                </button>
+             </form>
+          </div>
+        </div>
+      )}
+      
+      {/* Delete Folder Modal - Moved outside of inner browser conditional */}
+      <DeleteConfirmModal 
+        isOpen={!!folderToDelete}
+        onClose={() => setFolderToDelete(null)}
+        onConfirm={confirmDeleteFolder}
+        title="Delete Folder?"
+        description="Are you sure you want to remove this folder and all items inside? This action cannot be undone."
+      />
+
+      {/* Vault Browser (Inner Grid) */}
+      {openFolderId && activeFolder && (
+        <div 
+            className="fixed inset-0 z-[90] flex flex-col animate-in slide-in-from-bottom duration-500 transition-colors"
+            style={getBackgroundStyle()}
+        >
+           {/* Overlay for Image Themes */}
+            {theme.type === 'image' && (
+                <div className="absolute inset-0 bg-black/60 pointer-events-none z-0 backdrop-blur-[4px]" />
+            )}
+            {/* Ambient Background for non-image */}
+            {theme.type !== 'image' && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-lg pointer-events-none z-0" />
+            )}
+
+           {/* Header */}
+           <div className="pt-8 pb-4 px-4 md:px-8 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between bg-[#09090b]/30 backdrop-blur-xl sticky top-0 z-50 shadow-lg gap-4">
+              <div className="flex items-center gap-4 relative z-10 flex-shrink-0">
+                  <button onClick={() => setOpenFolderId(null)} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white">
+                     <ArrowRight className="w-6 h-6 rotate-180" />
+                  </button>
+                  <div>
+                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                        {activeFolder.type === 'private' && <Lock className="w-5 h-5 text-red-400" />}
+                        {activeFolder.name}
+                     </h2>
+                     <p className="text-zinc-400 text-xs font-medium">Vault Browser</p>
+                  </div>
+              </div>
+
+              <div className="flex items-center gap-4 relative z-10 w-full md:w-auto justify-end">
+                  {/* Search Bar */}
+                  <div className="flex-1 md:flex-none flex items-center bg-white/5 border border-white/10 rounded-full px-3 py-2 focus-within:bg-black/40 focus-within:border-emerald-500/50 transition-all max-w-xs">
+                    <Search className="w-4 h-4 text-zinc-500" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search vault..."
+                        className="bg-transparent border-none focus:outline-none text-sm text-white placeholder:text-zinc-600 ml-2 w-full md:w-40"
+                    />
+                    {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="text-zinc-500 hover:text-white">
+                            <X className="w-3 h-3" />
+                        </button>
+                    )}
+                  </div>
+
+                  {!isSharedMode && (
+                    <>
+                        <div className="h-6 w-px bg-white/10 hidden md:block" />
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <button 
+                                onClick={() => setIsVaultEditing(!isVaultEditing)}
+                                className={`p-2.5 rounded-full transition-all ${isVaultEditing ? 'bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}
+                                title="Toggle Edit Mode"
+                            >
+                                {isVaultEditing ? <Check className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
+                            </button>
+                            
+                            <button 
+                                onClick={() => setIsAddingItem(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-lg shadow-emerald-500/20 transition-all"
+                            >
+                                <Plus className="w-5 h-5" />
+                                <span className="hidden md:inline">Add Item</span>
+                            </button>
+                        </div>
+                    </>
+                  )}
+              </div>
+           </div>
+
+           {/* Grid Content */}
+           <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative z-10">
+              <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 auto-rows-[180px] gap-6 pb-20">
+                 {filteredItems?.map(block => (
+                    <BentoItem 
+                       key={block.id}
+                       block={block}
+                       isEditing={isVaultEditing && !isSharedMode} 
+                       onRemove={handleRemoveBlock}
+                       onResize={handleResizeBlock}
+                       onEditContent={setEditingBlock}
+                       onMove={handleMoveBlock}
+                       onUpdate={(id, updates) => handleUpdateBlock({ ...block, ...updates, id } as BlockData)}
+                    />
+                 ))}
+                 {filteredItems?.length === 0 && (
+                    <div className="col-span-full h-64 flex flex-col items-center justify-center text-zinc-500 border-2 border-dashed border-white/10 rounded-[2rem] bg-black/20">
+                        {searchQuery ? (
+                            <>
+                                <Search className="w-12 h-12 mb-4 opacity-20" />
+                                <p>No items match "{searchQuery}"</p>
+                            </>
+                        ) : (
+                            <>
+                                <Shield className="w-12 h-12 mb-4 opacity-20" />
+                                <p>This folder is empty. {isSharedMode ? '' : 'Add items using the button above.'}</p>
+                            </>
+                        )}
+                    </div>
+                 )}
+              </div>
+           </div>
+
+           {/* Modals for Inner Grid */}
+           <VaultAddItemModal 
+             isOpen={isAddingItem} 
+             onClose={() => setIsAddingItem(false)}
+             onAdd={handleAddBlockData}
+           />
+           
+           <BlockEditorModal 
+              isOpen={!!editingBlock}
+              block={editingBlock}
+              onClose={() => setEditingBlock(null)}
+              onSave={handleUpdateBlock}
+           />
+           
+           <DeleteConfirmModal 
+              isOpen={!!blockToDelete}
+              onClose={() => setBlockToDelete(null)}
+              onConfirm={confirmRemoveBlock}
+           />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Internal Component: Vault Add Item Modal ---
+
+interface VaultAddItemModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (data: BlockData) => void;
+}
+
+const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, onAdd }) => {
+  const [type, setType] = useState<'video' | 'link' | 'note'>('video');
+  const [url, setUrl] = useState('');
+  const [tag, setTag] = useState('');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [isFetching, setIsFetching] = useState(false);
+
+  // Auto-fetch metadata when URL changes
+  useEffect(() => {
+    if (!url || type === 'note') {
+        setIsFetching(false);
+        return;
+    }
+
+    if (title) return;
+
+    const debounceTimer = setTimeout(async () => {
+       setIsFetching(true);
+       try {
+          // 1. Try NoEmbed (Best for standard OEmbed providers like YouTube, Vimeo, Reddit)
+          const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+          const data = await res.json();
+          
+          if (data.title && !data.error) {
+              setTitle(data.title);
+          } else {
+              // 2. Fallback to Microlink (Best for Instagram, Facebook, TikTok, Twitter, General meta tags)
+              const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
+              const microData = await microRes.json();
+              
+              if (microData.status === 'success' && microData.data.title) {
+                  setTitle(microData.data.title);
+              } else {
+                  runHeuristic(url);
+              }
+          }
+       } catch (error) {
+           // Network error on NoEmbed, try Microlink
+           try {
+              const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
+              const microData = await microRes.json();
+              if (microData.status === 'success' && microData.data.title) {
+                  setTitle(microData.data.title);
+              } else {
+                  runHeuristic(url);
+              }
+           } catch (e) {
+              runHeuristic(url);
+           }
+       } finally {
+          setIsFetching(false);
+       }
+    }, 800);
+
+    return () => clearTimeout(debounceTimer);
+  }, [url, type]);
+
+  const runHeuristic = (val: string) => {
+     if (val.includes('youtube') || val.includes('youtu.be')) setTitle('YouTube Video');
+     else if (val.includes('vimeo')) setTitle('Vimeo Video');
+     else if (val.includes('tiktok')) setTitle('TikTok Post');
+     else if (val.includes('twitter') || val.includes('x.com')) setTitle('Social Post');
+     else if (val.includes('instagram')) setTitle('Instagram Post');
+     else if (val.includes('facebook')) setTitle('Facebook Post');
+     else if (val.length > 8) {
+       try {
+         const domain = new URL(val).hostname.replace('www.', '').split('.')[0];
+         setTitle(domain.charAt(0).toUpperCase() + domain.slice(1));
+       } catch (e) { /* ignore */ }
+     }
+  };
+
+  const handleSubmit = () => {
+    const id = Date.now().toString();
+    let block: BlockData;
+
+    if (type === 'note') {
+      block = {
+        id,
+        type: 'text',
+        size: '2x1',
+        title: title || 'Untitled Note',
+        content: content || 'No content...',
+        lastUpdated: Date.now()
+      };
+    } else {
+      // Video or Link
+      let icon = 'globe';
+      if (url.includes('youtube') || url.includes('youtu.be')) icon = 'youtube';
+      else if (url.includes('vimeo')) icon = 'video';
+      else if (url.includes('twitch')) icon = 'twitch';
+      else if (url.includes('twitter') || url.includes('x.com')) icon = 'twitter';
+      else if (url.includes('instagram')) icon = 'instagram';
+      else if (url.includes('facebook')) icon = 'facebook';
+      else if (url.includes('spotify')) icon = 'spotify';
+      else if (type === 'video') icon = 'video';
+      else if (type === 'link') icon = 'link';
+
+      block = {
+        id,
+        type: 'social',
+        size: '1x1',
+        title: title || 'Link',
+        url: url,
+        iconName: icon,
+        tags: tag ? [tag] : [],
+        lastUpdated: Date.now()
+      };
+    }
+
+    onAdd(block);
+    // Reset & Close
+    setUrl('');
+    setTag('');
+    setTitle('');
+    setContent('');
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={onClose} />
+      
+      <div className="relative w-full max-w-md glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+        <div className="flex justify-between items-center mb-6">
+           <h3 className="text-xl font-bold text-white">Add to Vault</h3>
+           <button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 p-1 bg-black/20 rounded-xl">
+          <button onClick={() => setType('video')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'video' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            <Video className="w-4 h-4" /> Video
+          </button>
+          <button onClick={() => setType('link')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'link' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            <Globe className="w-4 h-4" /> Link
+          </button>
+          <button onClick={() => setType('note')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'note' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            <StickyNote className="w-4 h-4" /> Note
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {type !== 'note' && (
+            <div>
+               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">URL Link</label>
+               <div className="relative group">
+                 <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                 <input 
+                    type="url" 
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none"
+                    placeholder="https://..."
+                    autoFocus
+                 />
+               </div>
+            </div>
+          )}
+
+          <div>
+             <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 flex items-center justify-between">
+                {type === 'note' ? 'Note Title' : 'Title'}
+                {isFetching && <span className="flex items-center gap-1 text-emerald-400 normal-case"><Loader2 className="w-3 h-3 animate-spin" /> Fetching info...</span>}
+             </label>
+             <div className="relative">
+                <input 
+                    type="text" 
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none"
+                    placeholder={type === 'note' ? "My Secret Note" : "Site Title"}
+                />
+             </div>
+          </div>
+
+          {type === 'video' && (
+            <div>
+               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">Tag (For future search)</label>
+               <div className="relative group">
+                 <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                 <input 
+                    type="text" 
+                    value={tag}
+                    onChange={(e) => setTag(e.target.value)}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none"
+                    placeholder="e.g. inspiration, tutorial, music"
+                 />
+               </div>
+            </div>
+          )}
+
+          {type === 'note' && (
+            <div>
+               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">Content</label>
+               <textarea 
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="w-full h-24 bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none resize-none"
+                  placeholder="Type your note here..."
+               />
+            </div>
+          )}
+
+          <button 
+            onClick={handleSubmit}
+            disabled={type !== 'note' && !url}
+            className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
+          >
+            Add Item
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};

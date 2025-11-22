@@ -1,0 +1,167 @@
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bloxm | Personal Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Grand+Hotel&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        /* Apple-style fluid smoothing */
+        --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+        /* Bouncy spring physics for interactions */
+        --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+        /* Slow, dreamy movement */
+        --ease-flow: cubic-bezier(0.4, 0.0, 0.2, 1);
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #09090b;
+        color: #f4f4f5;
+        overflow-x: hidden;
+        scroll-behavior: smooth;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        transition: background 0.3s ease;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      /* Liquid Glass Core - Physics Based */
+      .glass-panel {
+        background: rgba(9, 9, 11, 0.6);
+        backdrop-filter: blur(24px) saturate(150%);
+        -webkit-backdrop-filter: blur(24px) saturate(150%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 
+          0 8px 32px 0 rgba(0, 0, 0, 0.5),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+        
+        /* The Magic Sauce: Separate transitions for properties */
+        transition: 
+          transform 0.4s var(--ease-spring), 
+          box-shadow 0.4s var(--ease-smooth), 
+          background 0.3s ease,
+          border-color 0.3s ease;
+          
+        will-change: transform, box-shadow;
+      }
+
+      /* Pronounced Hover Effect */
+      .glass-panel:hover {
+        background: rgba(20, 20, 25, 0.75);
+        border-color: rgba(255, 255, 255, 0.25);
+        box-shadow: 
+          0 20px 40px -12px rgba(0, 0, 0, 0.8),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      }
+
+      /* Smooth Grid Layout Transitions */
+      .smooth-item {
+        transition: all 0.6s var(--ease-smooth);
+      }
+      
+      .smooth-item.is-dragging {
+        transition: none !important;
+        z-index: 50;
+      }
+
+      /* Liquid Button - High Tactile Feel */
+      .liquid-btn {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e4e4e7;
+        transition: all 0.3s var(--ease-spring);
+        position: relative;
+        overflow: hidden;
+      }
+      .liquid-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        transform: translateY(-3px) scale(1.05);
+        box-shadow: 0 10px 25px -5px rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+      .liquid-btn:active {
+        transform: scale(0.95);
+        box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.3);
+        transition-duration: 0.1s;
+      }
+
+      /* GPU Optimized Animations */
+      @keyframes float {
+        0% { transform: translate3d(0px, 0px, 0) rotate(0deg); }
+        33% { transform: translate3d(30px, -50px, 0) rotate(10deg); }
+        66% { transform: translate3d(-20px, 20px, 0) rotate(-5deg); }
+        100% { transform: translate3d(0px, 0px, 0) rotate(0deg); }
+      }
+      @keyframes float-delayed {
+        0% { transform: translate3d(0px, 0px, 0) rotate(0deg) scale(1); }
+        50% { transform: translate3d(-40px, 30px, 0) rotate(-10deg) scale(1.1); }
+        100% { transform: translate3d(0px, 0px, 0) rotate(0deg) scale(1); }
+      }
+      @keyframes heartbeat {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+      }
+      
+      /* Classes to force GPU usage */
+      .animate-float {
+        animation: float 20s infinite ease-in-out;
+        will-change: transform;
+      }
+      .animate-float-delayed {
+        animation: float-delayed 25s infinite ease-in-out reverse;
+        will-change: transform;
+      }
+      .animate-heartbeat {
+        animation: heartbeat 5s infinite ease-in-out; /* Slowed down for calmness */
+      }
+      
+      /* Utilities */
+      .text-glow {
+        text-shadow: 0 0 30px rgba(255,255,255,0.15);
+      }
+      
+      ::selection {
+        background: rgba(52, 211, 153, 0.3);
+        color: white;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
