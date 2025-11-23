@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { X, Image as ImageIcon, Palette, Check, Upload } from 'lucide-react';
+import React from 'react';
+import { X, Palette, Check } from 'lucide-react';
 import { ThemeConfig } from '../types';
 
 interface ThemeSelectorProps {
@@ -62,28 +62,7 @@ const PRESETS: { name: string, config: ThemeConfig }[] = [
 ];
 
 export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ isOpen, onClose, onSelect, currentTheme }) => {
-  const [customUrl, setCustomUrl] = useState('');
-
   if (!isOpen) return null;
-
-  const handleCustomImage = () => {
-    if (customUrl) {
-      onSelect({ type: 'image', value: customUrl });
-      onClose();
-    }
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        onSelect({ type: 'image', value: reader.result as string });
-        onClose();
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -100,7 +79,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ isOpen, onClose, o
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-2 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
           {PRESETS.map((preset) => (
             <button
               key={preset.name}
@@ -122,35 +101,6 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({ isOpen, onClose, o
               )}
             </button>
           ))}
-        </div>
-
-        <div className="border-t border-white/10 pt-6">
-            <label className="block text-xs font-bold text-zinc-500 mb-3 uppercase tracking-wider">Custom Image</label>
-            <div className="flex gap-3">
-                <div className="relative flex-1 group">
-                  <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                  <input
-                      type="text"
-                      value={customUrl}
-                      onChange={(e) => setCustomUrl(e.target.value)}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500/50 focus:bg-black/40 focus:outline-none transition-all"
-                      placeholder="https://... or upload ->"
-                  />
-                </div>
-                
-                <label className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 flex items-center justify-center transition-colors group" title="Upload Image">
-                  <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                  <Upload className="w-5 h-5 text-zinc-400 group-hover:text-white" />
-                </label>
-
-                <button 
-                    onClick={handleCustomImage}
-                    disabled={!customUrl}
-                    className="px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/20"
-                >
-                    Set
-                </button>
-            </div>
         </div>
       </div>
     </div>

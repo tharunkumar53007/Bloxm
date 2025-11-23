@@ -1,5 +1,6 @@
 
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { BlockData } from '../types';
 import { BlockRenderer } from './BlockRenderer';
 import { X, Maximize2, Pencil, GripVertical, Scaling, Copy, CheckCircle2 } from 'lucide-react';
@@ -15,6 +16,7 @@ interface BentoItemProps {
   onMove: (dragId: string, hoverId: string) => void;
   onUpdate?: (id: string, updates: Partial<BlockData>) => void;
   onToggleSelect?: (id: string, isModifier: boolean) => void;
+  onItemClick?: (block: BlockData) => void;
 }
 
 const getSizeClasses = (size: string): string => {
@@ -39,7 +41,8 @@ export const BentoItem: React.FC<BentoItemProps> = ({
   onEditContent,
   onMove,
   onUpdate,
-  onToggleSelect
+  onToggleSelect,
+  onItemClick
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -152,9 +155,23 @@ export const BentoItem: React.FC<BentoItemProps> = ({
     }
   };
 
+  const handleItemClick = (e: React.MouseEvent) => {
+      if (isEditing) {
+        e.preventDefault(); // Prevent link nav when editing
+        return;
+      }
+      
+      // If a custom item click handler exists (e.g. for previewing docs), use it
+      if (onItemClick) {
+          e.preventDefault();
+          onItemClick(block);
+      }
+  };
+
   return (
     <Wrapper
       {...wrapperProps}
+      onClick={handleItemClick}
       // @ts-ignore
       ref={itemRef}
       draggable={isEditing && !isResizing && !isSelected} 
@@ -266,9 +283,9 @@ export const BentoItem: React.FC<BentoItemProps> = ({
         )}
       </div>
 
-      {isResizing && ghostSize && (
+      {isResizing && ghostSize && createPortal(
         <div 
-          className="fixed pointer-events-none z-[100] border-2 border-indigo-400 border-dashed rounded-[2rem] bg-indigo-500/20 backdrop-blur-md flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.4)] transition-none"
+          className="fixed pointer-events-none z-[9999] border-2 border-indigo-400 border-dashed rounded-[2rem] bg-indigo-500/20 backdrop-blur-md flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.4)] transition-none"
           style={{
              top: itemRef.current?.getBoundingClientRect()?.top ?? 0,
              left: itemRef.current?.getBoundingClientRect()?.left ?? 0,
@@ -286,7 +303,8 @@ export const BentoItem: React.FC<BentoItemProps> = ({
                </span>
              )}
            </div>
-        </div>
+        </div>,
+        document.body
       )}
     </Wrapper>
   );

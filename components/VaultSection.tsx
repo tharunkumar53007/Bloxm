@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, SquarePen, Check, Search, CheckCircle2, Type, Image as ImageIcon, Upload } from 'lucide-react';
+import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, SquarePen, Check, Search, CheckCircle2, Type, Image as ImageIcon, Upload, FileText, Download, Share2, ExternalLink } from 'lucide-react';
 import { BlockData, VaultFolder, BlockType, ThemeConfig } from '../types';
 import { BentoItem } from './BentoItem';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
@@ -50,6 +50,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   // Inside Vault State
   const [editingBlock, setEditingBlock] = useState<BlockData | null>(null);
   const [blockToDelete, setBlockToDelete] = useState<string | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<BlockData | null>(null);
   
   // Multi-select State
   const [selectedVaultItemIds, setSelectedVaultItemIds] = useState<string[]>([]);
@@ -58,7 +59,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   // Folder Deletion State
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
 
-  const activeFolder = folders.find(f => f.id === openFolderId);
+  const activeFolder = folders?.find(f => f && f.id === openFolderId);
 
   useEffect(() => {
     if (!openFolderId) {
@@ -118,9 +119,9 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
         items: [],
         description: data.description || 'A collection of hidden gems.'
       };
-      onUpdateFolders([...folders, newFolder]);
+      onUpdateFolders([...(folders || []), newFolder]);
     } else if (mode === 'edit' && folderId) {
-      onUpdateFolders(folders.map(f => f.id === folderId ? { ...f, ...data } as VaultFolder : f));
+      onUpdateFolders((folders || []).map(f => (f && f.id === folderId) ? { ...f, ...data } as VaultFolder : f));
     }
 
     setFolderModal(prev => ({ ...prev, isOpen: false }));
@@ -132,13 +133,14 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
   const confirmDeleteFolder = () => {
     if (folderToDelete) {
-      onUpdateFolders(folders.filter(f => f.id !== folderToDelete));
+      onUpdateFolders((folders || []).filter(f => f && f.id !== folderToDelete));
       if (openFolderId === folderToDelete) onOpenFolder(null);
       setFolderToDelete(null);
     }
   };
 
   const handleFolderClick = (folder: VaultFolder) => {
+    if (!folder) return;
     if (isEditing) return; // Don't open when editing layout
     if (folder.type === 'private') {
       setAuthFolderId(folder.id);
@@ -151,7 +153,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
   const handleAuthSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const folder = folders.find(f => f.id === authFolderId);
+    const folder = (folders || []).find(f => f && f.id === authFolderId);
     if (folder && folder.password === passwordInput) {
       onOpenFolder(folder.id);
       setAuthFolderId(null);
@@ -163,12 +165,13 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   // --- Inner Block Management ---
 
   const updateFolderItems = (folderId: string, newItems: BlockData[]) => {
-    onUpdateFolders(folders.map(f => f.id === folderId ? { ...f, items: newItems } : f));
+    onUpdateFolders((folders || []).map(f => (f && f.id === folderId) ? { ...f, items: newItems } : f));
   };
 
   const handleAddBlockData = (blockData: BlockData) => {
     if (!activeFolder) return;
-    updateFolderItems(activeFolder.id, [...activeFolder.items, blockData]);
+    const currentItems = activeFolder.items || [];
+    updateFolderItems(activeFolder.id, [...currentItems, blockData]);
   };
 
   const handleRemoveBlock = (id: string) => {
@@ -182,29 +185,32 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
   const confirmRemoveBlock = () => {
     if (!activeFolder) return;
+    const currentItems = activeFolder.items || [];
     
     if (isBulkDeleteVault) {
-        const newItems = activeFolder.items.filter(b => !selectedVaultItemIds.includes(b.id));
+        const newItems = currentItems.filter(b => b && !selectedVaultItemIds.includes(b.id));
         updateFolderItems(activeFolder.id, newItems);
         setSelectedVaultItemIds([]);
         setIsBulkDeleteVault(false);
     } else if (blockToDelete) {
-        updateFolderItems(activeFolder.id, activeFolder.items.filter(b => b.id !== blockToDelete));
+        updateFolderItems(activeFolder.id, currentItems.filter(b => b && b.id !== blockToDelete));
     }
     setBlockToDelete(null);
   };
 
   const handleUpdateBlock = (updatedBlock: BlockData) => {
     if (!activeFolder) return;
+    const currentItems = activeFolder.items || [];
     const blockWithTime = { ...updatedBlock, lastUpdated: Date.now() };
-    updateFolderItems(activeFolder.id, activeFolder.items.map(b => b.id === updatedBlock.id ? blockWithTime : b));
+    updateFolderItems(activeFolder.id, currentItems.map(b => (b && b.id === updatedBlock.id) ? blockWithTime : b));
   };
 
   const handleResizeBlock = (id: string) => {
     if (!activeFolder) return;
+    const currentItems = activeFolder.items || [];
     const sizes = ['1x1', '2x1', '2x2', '1x2'];
-    updateFolderItems(activeFolder.id, activeFolder.items.map(b => {
-      if (b.id !== id) return b;
+    updateFolderItems(activeFolder.id, currentItems.map(b => {
+      if (!b || b.id !== id) return b;
       const currentIndex = sizes.indexOf(b.size);
       const nextSize = currentIndex !== -1 ? sizes[(currentIndex + 1) % sizes.length] : '1x1';
       return { ...b, size: nextSize };
@@ -213,9 +219,9 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
   const handleMoveBlock = useCallback((dragId: string, hoverId: string) => {
     if (!activeFolder) return;
-    const prev = activeFolder.items;
-    const dragIndex = prev.findIndex(b => b.id === dragId);
-    const hoverIndex = prev.findIndex(b => b.id === hoverId);
+    const prev = activeFolder.items || [];
+    const dragIndex = prev.findIndex(b => b && b.id === dragId);
+    const hoverIndex = prev.findIndex(b => b && b.id === hoverId);
     if (dragIndex < 0 || hoverIndex < 0 || dragIndex === hoverIndex) return;
     
     const newBlocks = [...prev];
@@ -226,6 +232,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
   const handleVaultItemInteraction = (id: string, isModifierPressed: boolean) => {
     if (!isVaultEditing) return;
+    const currentItems = activeFolder?.items || [];
 
     if (isModifierPressed || selectedVaultItemIds.length > 0) {
        setSelectedVaultItemIds(prev => {
@@ -234,23 +241,31 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
        });
     } else {
        // Open editor
-       const block = activeFolder?.items.find(b => b.id === id);
+       const block = currentItems.find(b => b && b.id === id);
        if (block) setEditingBlock(block);
     }
   };
 
+  const handleItemClick = (block: BlockData) => {
+      if (block.tags?.includes('document')) {
+          setPreviewDocument(block);
+      }
+  };
+
   // Filter items based on search query
   const filteredItems = useMemo(() => {
-    return activeFolder?.items.filter(item => {
+    const currentItems = activeFolder?.items || [];
+    return currentItems.filter(item => {
+      if (!item) return false;
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
         (item.title?.toLowerCase().includes(q)) ||
         (item.content?.toLowerCase().includes(q)) ||
-        (item.tags?.some(tag => tag.toLowerCase().includes(q)))
+        (item.tags?.some(tag => tag && tag.toLowerCase().includes(q)))
       );
-    }) || [];
-  }, [activeFolder?.items, searchQuery]);
+    });
+  }, [activeFolder, searchQuery]); // Dep: activeFolder covers activeFolder.items
 
   return (
     <div className="mt-24 mb-20 animate-in fade-in slide-in-from-bottom-10 duration-700">
@@ -279,7 +294,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
       {/* Folders Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {folders.map(folder => (
+        {(folders || []).filter(Boolean).map(folder => (
           <div 
             key={folder.id}
             onClick={() => handleFolderClick(folder)}
@@ -314,7 +329,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
             
             <div>
               <h3 className="text-white font-bold text-lg tracking-tight group-hover:text-emerald-300 transition-colors">{folder.name}</h3>
-              <p className="text-zinc-500 text-xs font-medium mt-1 truncate">{folder.items.length} items</p>
+              <p className="text-zinc-500 text-xs font-medium mt-1 truncate">{(folder.items || []).length} items</p>
             </div>
 
             {/* Folder Glow */}
@@ -322,7 +337,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
           </div>
         ))}
 
-        {folders.length === 0 && !folderModal.isOpen && (
+        {(!folders || folders.length === 0) && !folderModal.isOpen && (
            <div className="col-span-full text-center py-12 border border-dashed border-zinc-800 rounded-3xl bg-black/20">
               <FolderOpen className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
               <p className="text-zinc-500 text-sm">Vault is empty. {isEditing && !isSharedMode ? 'Create a folder to start.' : ''}</p>
@@ -532,6 +547,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
                        onMove={handleMoveBlock}
                        onUpdate={(id, updates) => handleUpdateBlock({ ...block, ...updates, id } as BlockData)}
                        onToggleSelect={handleVaultItemInteraction}
+                       onItemClick={handleItemClick}
                     />
                  ))}
                  {filteredItems?.length === 0 && (
@@ -573,10 +589,122 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
               onConfirm={confirmRemoveBlock}
               count={isBulkDeleteVault ? selectedVaultItemIds.length : 1}
            />
+
+           {/* Document Preview Modal */}
+           <DocumentPreviewModal 
+              isOpen={!!previewDocument}
+              block={previewDocument}
+              onClose={() => setPreviewDocument(null)}
+           />
         </div>
       )}
     </div>
   );
+};
+
+// --- Internal Component: Document Preview Modal ---
+interface DocumentPreviewModalProps {
+    isOpen: boolean;
+    block: BlockData | null;
+    onClose: () => void;
+}
+
+const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ isOpen, block, onClose }) => {
+    if (!isOpen || !block) return null;
+
+    const isImage = block.type === 'image' || (block.url && (block.url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || block.url.startsWith('data:image')));
+    
+    const handleDownload = () => {
+        if (!block.url) return;
+        const link = document.createElement('a');
+        link.href = block.url;
+        link.download = block.title || 'download';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleShare = async () => {
+        if (navigator.share && block.url) {
+            try {
+                await navigator.share({
+                    title: block.title,
+                    text: block.content,
+                    url: block.url
+                });
+            } catch (e) {
+                console.log('Share failed', e);
+            }
+        } else {
+            // Fallback
+            if (block.url) {
+                navigator.clipboard.writeText(block.url);
+                alert('Link copied to clipboard!');
+            }
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl transition-opacity" onClick={onClose} />
+            
+            <div className="relative w-full max-w-4xl h-[80vh] flex flex-col glass-panel rounded-[2rem] border border-white/10 shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-white/10 bg-black/20">
+                    <div>
+                        <h3 className="text-xl font-bold text-white line-clamp-1">{block.title}</h3>
+                        <p className="text-zinc-400 text-xs">{block.content}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
+                        <X className="w-6 h-6 text-zinc-400 hover:text-white" />
+                    </button>
+                </div>
+
+                {/* Content Preview */}
+                <div className="flex-1 bg-black/40 flex items-center justify-center p-8 relative overflow-hidden">
+                     {/* Checkerboard pattern for transparency */}
+                     <div className="absolute inset-0 opacity-20" 
+                        style={{ 
+                            backgroundImage: 'linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%)',
+                            backgroundSize: '20px 20px',
+                            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
+                        }} 
+                     />
+
+                     {isImage ? (
+                         <img 
+                            src={block.url || block.imageUrl} 
+                            alt={block.title} 
+                            className="max-w-full max-h-full object-contain shadow-2xl rounded-lg relative z-10"
+                         />
+                     ) : (
+                         <div className="flex flex-col items-center gap-4 relative z-10 text-zinc-400">
+                             <FileText className="w-24 h-24 opacity-50" />
+                             <p className="text-lg">Preview not available for this file type</p>
+                         </div>
+                     )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-6 border-t border-white/10 bg-black/20 flex justify-center gap-4">
+                     <button 
+                        onClick={handleDownload}
+                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-bold hover:bg-zinc-200 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-white/5"
+                     >
+                        <Download className="w-4 h-4" />
+                        Download
+                     </button>
+                     <button 
+                        onClick={handleShare}
+                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all hover:scale-105 active:scale-95 border border-white/5"
+                     >
+                        <Share2 className="w-4 h-4" />
+                        Share
+                     </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // --- Internal Component: Vault Add Item Modal ---
@@ -588,16 +716,17 @@ interface VaultAddItemModalProps {
 }
 
 const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, onAdd }) => {
-  const [type, setType] = useState<'video' | 'link' | 'note'>('video');
+  const [type, setType] = useState<'video' | 'link' | 'note' | 'document'>('video');
   const [url, setUrl] = useState('');
   const [tag, setTag] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isFetching, setIsFetching] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<{name: string, data: string, type: string} | null>(null);
 
   // Auto-fetch metadata when URL changes
   useEffect(() => {
-    if (!url || type === 'note') {
+    if (!url || type === 'note' || type === 'document') {
         setIsFetching(false);
         return;
     }
@@ -663,29 +792,49 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
 
   const runHeuristic = (val: string) => {
      let fallback = 'Link Item';
-     const lower = val.toLowerCase();
-     
-     if (lower.includes('youtube') || lower.includes('youtu.be')) fallback = 'YouTube Video';
-     else if (lower.includes('vimeo')) fallback = 'Vimeo Video';
-     else if (lower.includes('tiktok')) fallback = 'TikTok Post';
-     else if (lower.includes('twitter') || lower.includes('x.com')) fallback = 'X Post';
-     else if (lower.includes('instagram')) fallback = 'Instagram Post';
-     else if (lower.includes('facebook')) fallback = 'Facebook Post';
-     else if (lower.includes('linkedin')) fallback = 'LinkedIn Post';
-     else {
-        try {
-            const urlObj = new URL(val);
-            const domain = urlObj.hostname.replace('www.', '').split('.')[0];
-            if (domain) {
-                fallback = domain.charAt(0).toUpperCase() + domain.slice(1);
-                const path = urlObj.pathname.split('/').filter(Boolean).pop();
-                if (path && path.length > 3) {
-                   fallback += ` - ${path.replace(/-/g, ' ')}`;
+     try {
+         const lower = val.toLowerCase();
+         
+         if (lower.includes('youtube') || lower.includes('youtu.be')) fallback = 'YouTube Video';
+         else if (lower.includes('vimeo')) fallback = 'Vimeo Video';
+         else if (lower.includes('tiktok')) fallback = 'TikTok Post';
+         else if (lower.includes('twitter') || lower.includes('x.com')) fallback = 'X Post';
+         else if (lower.includes('instagram')) fallback = 'Instagram Post';
+         else if (lower.includes('facebook')) fallback = 'Facebook Post';
+         else if (lower.includes('linkedin')) fallback = 'LinkedIn Post';
+         else {
+            try {
+                const urlObj = new URL(val);
+                const domain = urlObj.hostname.replace('www.', '').split('.')[0];
+                if (domain) {
+                    fallback = domain.charAt(0).toUpperCase() + domain.slice(1);
+                    const path = urlObj.pathname.split('/').filter(Boolean).pop();
+                    if (path && path.length > 3) {
+                       fallback += ` - ${path.replace(/-/g, ' ')}`;
+                    }
                 }
-            }
-        } catch (e) { /* ignore */ }
+            } catch (e) { /* ignore */ }
+         }
+     } catch(e) {
+         // Fallback if something throws in string manipulation (unlikely for strings but safety first)
      }
      setTitle(fallback);
+  };
+
+  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+         if (file.size > 5 * 1024 * 1024) {
+            alert("File size limit is 5MB for local storage.");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setUploadedFile({ name: file.name, data: reader.result as string, type: file.type });
+            if (!title) setTitle(file.name);
+        };
+        reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = () => {
@@ -703,7 +852,18 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
       };
     } else {
       let icon = 'globe';
-      if (url.includes('youtube') || url.includes('youtu.be')) icon = 'youtube';
+      let finalUrl = url;
+      let blockImageUrl: string | undefined;
+      let blockType: BlockType = 'social';
+
+      if (type === 'document') {
+          icon = 'file-text';
+          finalUrl = uploadedFile ? uploadedFile.data : url;
+          if (uploadedFile && uploadedFile.type.startsWith('image/')) {
+              blockImageUrl = uploadedFile.data;
+              blockType = 'image'; // Switch to 'image' type for full visibility
+          }
+      } else if (url.includes('youtube') || url.includes('youtu.be')) icon = 'youtube';
       else if (url.includes('vimeo')) icon = 'video';
       else if (url.includes('twitch')) icon = 'twitch';
       else if (url.includes('twitter') || url.includes('x.com')) icon = 'twitter';
@@ -713,25 +873,29 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
       else if (type === 'video') icon = 'video';
       else if (type === 'link') icon = 'link';
 
-      // Generate favicon URL
+      // Generate favicon URL for links/videos (not uploads)
       let faviconUrl;
-      try {
-        if (url) {
-            const hostname = new URL(url).hostname;
-            faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
-        }
-      } catch(e) { /* ignore */ }
+      if (type !== 'document' || !uploadedFile) {
+          try {
+            if (finalUrl && !finalUrl.startsWith('data:')) {
+                const hostname = new URL(finalUrl).hostname;
+                faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
+            }
+          } catch(e) { /* ignore */ }
+      }
 
       block = {
         id,
-        type: 'social',
+        type: blockType,
         size: '1x1',
-        title: title || 'Link',
-        url: url,
+        title: title || (type === 'document' ? 'Document' : 'Link'),
+        url: finalUrl,
+        imageUrl: blockImageUrl,
         iconName: icon,
-        faviconUrl, // Store the generated favicon URL
-        tags: tag ? [tag] : [],
-        lastUpdated: Date.now()
+        faviconUrl,
+        tags: tag ? [tag] : (type === 'document' ? ['document'] : []),
+        lastUpdated: Date.now(),
+        content: blockType === 'image' ? (uploadedFile?.name || 'Image') : undefined
       };
     }
 
@@ -740,6 +904,7 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
     setTag('');
     setTitle('');
     setContent('');
+    setUploadedFile(null);
     onClose();
   };
 
@@ -756,31 +921,55 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 p-1 bg-black/20 rounded-xl">
-          <button onClick={() => setType('video')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'video' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+        <div className="flex gap-2 mb-6 p-1 bg-black/20 rounded-xl overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <button onClick={() => setType('video')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'video' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
             <Video className="w-4 h-4" /> Video
           </button>
-          <button onClick={() => setType('link')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'link' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <button onClick={() => setType('link')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'link' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
             <Globe className="w-4 h-4" /> Link
           </button>
-          <button onClick={() => setType('note')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'note' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <button onClick={() => setType('document')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'document' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            <FileText className="w-4 h-4" /> Doc
+          </button>
+          <button onClick={() => setType('note')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'note' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
             <StickyNote className="w-4 h-4" /> Note
           </button>
         </div>
 
         <div className="space-y-4">
+          {/* Document Upload Area */}
+          {type === 'document' && (
+             <div className="mb-4">
+                <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-2 block">Upload File</label>
+                <div className="relative">
+                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/10 rounded-xl bg-black/20 hover:bg-black/40 hover:border-emerald-500/30 transition-all cursor-pointer group">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <Upload className="w-6 h-6 mb-2 text-zinc-400 group-hover:text-emerald-400 transition-colors" />
+                            <p className="text-xs text-zinc-500 group-hover:text-zinc-300 text-center px-2 break-all">
+                                {uploadedFile ? uploadedFile.name : "Click to upload (PDF, Doc, etc)"}
+                            </p>
+                        </div>
+                        <input type="file" className="hidden" onChange={handleDocumentUpload} />
+                    </label>
+                </div>
+             </div>
+          )}
+
           {type !== 'note' && (
             <div>
-               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">URL Link</label>
+               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">
+                  {type === 'document' ? (uploadedFile ? 'Or Document URL (Ignored)' : 'Or Document URL') : 'URL Link'}
+               </label>
                <div className="relative group">
                  <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
                  <input 
                     type="url" 
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none"
-                    placeholder="https://..."
-                    autoFocus
+                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none disabled:opacity-50"
+                    placeholder={type === 'document' ? "https://example.com/file.pdf" : "https://..."}
+                    disabled={type === 'document' && !!uploadedFile}
+                    autoFocus={type !== 'document'}
                  />
                </div>
             </div>
@@ -797,7 +986,7 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none"
-                    placeholder={type === 'note' ? "My Secret Note" : "Site Title"}
+                    placeholder={type === 'note' ? "My Secret Note" : "Item Title"}
                 />
              </div>
           </div>
@@ -832,7 +1021,7 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
 
           <button 
             onClick={handleSubmit}
-            disabled={type !== 'note' && !url}
+            disabled={type !== 'note' && !url && !uploadedFile}
             className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
           >
             Add Item
@@ -987,6 +1176,15 @@ const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, onClose
                             <Upload className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400" />
                         </label>
                     </div>
+                    {/* Image Preview Container */}
+                    {formData.imageUrl && (
+                        <div className="mt-2 relative h-32 w-full rounded-xl overflow-hidden border border-white/10 group">
+                           <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <p className="text-xs text-white font-medium">Preview</p>
+                           </div>
+                        </div>
+                    )}
                   </div>
               )}
           </div>

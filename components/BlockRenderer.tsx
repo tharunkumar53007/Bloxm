@@ -18,7 +18,8 @@ import {
   AudioLines,
   Video,
   Tag,
-  Link as LinkIcon
+  Link as LinkIcon,
+  FileText
 } from 'lucide-react';
 
 interface BlockRendererProps {
@@ -39,7 +40,8 @@ const IconMap: Record<string, React.FC<any>> = {
   twitch: Twitch,
   facebook: Facebook,
   video: Video,
-  link: LinkIcon
+  link: LinkIcon,
+  'file-text': FileText
 };
 
 const getBrandColor = (name?: string) => {
@@ -55,6 +57,7 @@ const getBrandColor = (name?: string) => {
       case 'facebook': return 'text-blue-400';
       case 'video': return 'text-rose-400';
       case 'link': return 'text-indigo-400';
+      case 'file-text': return 'text-amber-200';
       default: return 'text-zinc-200';
   }
 };
@@ -64,7 +67,213 @@ const formatLastUpdated = (timestamp?: number) => {
   return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
+const getFileExtension = (block: BlockData): string => {
+    if (block.content && block.content.includes('.')) {
+        const parts = block.content.split('.');
+        const ext = parts.pop();
+        // Basic check to ensure it looks like an extension (2-4 chars usually)
+        if (ext && ext.length >= 2 && ext.length <= 4) return ext.toUpperCase();
+    }
+    if (block.url && block.url.includes('.')) {
+        try {
+            const url = new URL(block.url);
+            const pathname = url.pathname;
+            if (pathname.includes('.')) {
+                const ext = pathname.split('.').pop();
+                if (ext && ext.length < 6) return ext.toUpperCase();
+            }
+        } catch (e) {}
+    }
+    return 'FILE';
+};
+
+const getDocumentTheme = (ext: string) => {
+  const e = ext.toLowerCase();
+  
+  // PDF - Premium Red / Crimson
+  if (e === 'pdf') return {
+    bgGradient: 'from-[#450a0a] via-[#7f1d1d] to-[#991b1b]',
+    blobColor: 'bg-red-500',
+    glassBorder: 'border-red-500/30',
+    glassBg: 'bg-red-950/30',
+    textAccent: 'text-red-200',
+    badgeBg: 'bg-gradient-to-br from-red-500/20 to-red-900/40',
+    badgeBorder: 'border-red-400/30',
+    iconColor: 'text-red-400'
+  };
+
+  // Word / Docs - Premium Blue
+  if (['doc', 'docx'].includes(e)) return {
+    bgGradient: 'from-[#172554] via-[#1e40af] to-[#1d4ed8]',
+    blobColor: 'bg-blue-500',
+    glassBorder: 'border-blue-500/30',
+    glassBg: 'bg-blue-950/30',
+    textAccent: 'text-blue-200',
+    badgeBg: 'bg-gradient-to-br from-blue-500/20 to-blue-900/40',
+    badgeBorder: 'border-blue-400/30',
+    iconColor: 'text-blue-400'
+  };
+
+  // Excel / Sheets - Premium Emerald
+  if (['xls', 'xlsx', 'csv'].includes(e)) return {
+    bgGradient: 'from-[#064e3b] via-[#059669] to-[#10b981]',
+    blobColor: 'bg-emerald-500',
+    glassBorder: 'border-emerald-500/30',
+    glassBg: 'bg-emerald-950/30',
+    textAccent: 'text-emerald-200',
+    badgeBg: 'bg-gradient-to-br from-emerald-500/20 to-emerald-900/40',
+    badgeBorder: 'border-emerald-400/30',
+    iconColor: 'text-emerald-400'
+  };
+
+  // PowerPoint - Premium Orange/Amber
+  if (['ppt', 'pptx'].includes(e)) return {
+    bgGradient: 'from-[#7c2d12] via-[#c2410c] to-[#ea580c]',
+    blobColor: 'bg-orange-500',
+    glassBorder: 'border-orange-500/30',
+    glassBg: 'bg-orange-950/30',
+    textAccent: 'text-orange-200',
+    badgeBg: 'bg-gradient-to-br from-orange-500/20 to-orange-900/40',
+    badgeBorder: 'border-orange-400/30',
+    iconColor: 'text-orange-400'
+  };
+
+  // Archives - Premium Gold/Yellow
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(e)) return {
+    bgGradient: 'from-[#713f12] via-[#a16207] to-[#ca8a04]',
+    blobColor: 'bg-yellow-500',
+    glassBorder: 'border-yellow-500/30',
+    glassBg: 'bg-yellow-950/30',
+    textAccent: 'text-yellow-200',
+    badgeBg: 'bg-gradient-to-br from-yellow-500/20 to-yellow-900/40',
+    badgeBorder: 'border-yellow-400/30',
+    iconColor: 'text-yellow-400'
+  };
+
+  // Images - Premium Violet/Purple
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'tiff'].includes(e)) return {
+    bgGradient: 'from-[#4c1d95] via-[#7c3aed] to-[#8b5cf6]',
+    blobColor: 'bg-purple-500',
+    glassBorder: 'border-purple-500/30',
+    glassBg: 'bg-purple-950/30',
+    textAccent: 'text-purple-200',
+    badgeBg: 'bg-gradient-to-br from-purple-500/20 to-purple-900/40',
+    badgeBorder: 'border-purple-400/30',
+    iconColor: 'text-purple-400'
+  };
+
+   // Audio - Premium Pink
+  if (['mp3', 'wav', 'ogg', 'flac'].includes(e)) return {
+    bgGradient: 'from-[#831843] via-[#db2777] to-[#f472b6]',
+    blobColor: 'bg-pink-500',
+    glassBorder: 'border-pink-500/30',
+    glassBg: 'bg-pink-950/30',
+    textAccent: 'text-pink-200',
+    badgeBg: 'bg-gradient-to-br from-pink-500/20 to-pink-900/40',
+    badgeBorder: 'border-pink-400/30',
+    iconColor: 'text-pink-400'
+  };
+
+  // Code - Premium Slate/Cyan
+  if (['js', 'ts', 'html', 'css', 'json', 'py', 'java', 'c', 'cpp'].includes(e)) return {
+    bgGradient: 'from-[#0f172a] via-[#334155] to-[#475569]',
+    blobColor: 'bg-cyan-500',
+    glassBorder: 'border-cyan-500/30',
+    glassBg: 'bg-slate-900/30',
+    textAccent: 'text-cyan-200',
+    badgeBg: 'bg-gradient-to-br from-cyan-500/20 to-cyan-900/40',
+    badgeBorder: 'border-cyan-400/30',
+    iconColor: 'text-cyan-400'
+  };
+
+  // Default / Text - Premium Zinc/Dark
+  return {
+    bgGradient: 'from-[#18181b] via-[#27272a] to-[#3f3f46]',
+    blobColor: 'bg-zinc-500',
+    glassBorder: 'border-zinc-600/30',
+    glassBg: 'bg-zinc-900/30',
+    textAccent: 'text-zinc-200',
+    badgeBg: 'bg-gradient-to-br from-white/5 to-white/10',
+    badgeBorder: 'border-white/10',
+    iconColor: 'text-zinc-400'
+  };
+};
+
 export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
+  // Logic to render documents specifically without the banner
+  const isDocument = block.tags?.includes('document');
+
+  const renderDocument = () => {
+    const ext = getFileExtension(block);
+    const theme = getDocumentTheme(ext);
+    
+    return (
+        <div className={`flex flex-col items-center justify-center h-full w-full p-4 group relative overflow-hidden transition-all duration-500`}>
+            {/* Base Deep Gradient */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${theme.bgGradient} opacity-90 transition-all duration-700`} />
+            
+            {/* Liquid Ambient Blobs */}
+            <div className={`absolute top-[-50%] left-[-20%] w-[150%] h-[150%] ${theme.blobColor} opacity-20 blur-[80px] rounded-full animate-float mix-blend-overlay`} />
+            <div className={`absolute bottom-[-20%] right-[-20%] w-[100%] h-[100%] ${theme.blobColor} opacity-10 blur-[60px] rounded-full animate-float-delayed mix-blend-overlay`} />
+
+            {/* Noise Texture */}
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
+            
+            {/* Glass Sheen Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col items-center w-full">
+                {/* Premium Glass Badge for Extension */}
+                <div className={`
+                    w-16 h-16 mb-3 rounded-2xl 
+                    ${theme.badgeBg} ${theme.badgeBorder} border 
+                    flex items-center justify-center 
+                    shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]
+                    group-hover:scale-110 group-hover:-translate-y-1
+                    transition-all duration-500 cubic-bezier(0.34, 1.56, 0.64, 1)
+                    backdrop-blur-md relative overflow-hidden
+                `}>
+                    {/* Inner Badge Shine */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
+                    
+                    <span className={`text-lg font-black tracking-wider ${theme.textAccent} relative z-10 drop-shadow-md`}>{ext}</span>
+                </div>
+                
+                {/* Title with improved typography */}
+                <span className={`text-sm font-bold text-white/90 group-hover:text-white transition-colors text-center line-clamp-2 px-1 drop-shadow-md w-full break-words leading-tight min-h-[2.5em] flex items-center justify-center`}>
+                    {block.title || "Document"}
+                </span>
+
+                {/* File Size / Type hint (Mocked or calculated) */}
+                <div className={`
+                    mt-3 flex items-center gap-1.5 
+                    text-[10px] font-bold uppercase tracking-widest ${theme.textAccent}
+                    opacity-60 group-hover:opacity-100 transition-all duration-300
+                `}>
+                   <div className={`w-1.5 h-1.5 rounded-full ${theme.blobColor} shadow-[0_0_5px_currentColor]`} />
+                   {ext} FILE
+                </div>
+                
+                {/* Hover "Preview" Action - Subtle Pill */}
+                <div className={`
+                   absolute bottom-4 translate-y-8 opacity-0 group-hover:translate-y-0 group-hover:opacity-100
+                   transition-all duration-300 ease-out
+                   bg-black/40 backdrop-blur-md border border-white/10
+                   px-3 py-1.5 rounded-full flex items-center gap-1.5
+                   shadow-lg
+                `}>
+                    <FileText className={`w-3 h-3 ${theme.textAccent}`} />
+                    <span className="text-[10px] font-semibold text-white">Preview</span>
+                </div>
+            </div>
+        </div>
+    );
+  };
+
+  if (isDocument) {
+      return renderDocument();
+  }
+
   const renderSocial = () => {
     const Icon = block.iconName ? IconMap[block.iconName.toLowerCase()] : Globe;
     const hasBanner = !!block.imageUrl;
