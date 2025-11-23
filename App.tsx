@@ -184,9 +184,14 @@ const App: React.FC = () => {
   // Persistence Effect
   useEffect(() => {
     if (auth.isAuthenticated && !isSharedMode) {
-      localStorage.setItem('bloxm_blocks', JSON.stringify(blocks));
-      localStorage.setItem('bloxm_theme', JSON.stringify(theme));
-      localStorage.setItem('bloxm_vault', JSON.stringify(vaultFolders));
+      try {
+        localStorage.setItem('bloxm_blocks', JSON.stringify(blocks));
+        localStorage.setItem('bloxm_theme', JSON.stringify(theme));
+        localStorage.setItem('bloxm_vault', JSON.stringify(vaultFolders));
+      } catch (e) {
+        console.warn("Storage Quota Exceeded. Data may not be saved.", e);
+        // We catch the error to prevent the app from crashing (White Screen / Black Screen)
+      }
     }
   }, [blocks, theme, vaultFolders, auth.isAuthenticated, isSharedMode]);
 

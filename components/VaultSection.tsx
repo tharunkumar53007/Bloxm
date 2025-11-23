@@ -1,10 +1,11 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, SquarePen, Check, Search, CheckCircle2, Type, Image as ImageIcon, Upload, FileText, Download, Share2, ExternalLink } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, SquarePen, Check, Search, CheckCircle2, Type, Image as ImageIcon, Upload, FileText, Download, Share2, ExternalLink, XCircle, Eye, EyeOff } from 'lucide-react';
 import { BlockData, VaultFolder, BlockType, ThemeConfig } from '../types';
 import { BentoItem } from './BentoItem';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 
+// --- Types ---
 interface VaultSectionProps {
   folders: VaultFolder[];
   isEditing: boolean;
@@ -14,6 +15,868 @@ interface VaultSectionProps {
   openFolderId: string | null;
   onOpenFolder: (id: string | null) => void;
 }
+
+// --- Helper Functions ---
+
+const normalizeUrl = (url: string): string => {
+  if (!url) return '';
+  if (!/^https?:\/\//i.test(url)) {
+    return `https://${url}`;
+  }
+  return url;
+};
+
+const getFaviconUrl = (url: string) => {
+  try {
+    const domain = new URL(normalizeUrl(url)).hostname;
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  } catch (e) {
+    return undefined;
+  }
+};
+
+const formatBytes = (bytes: number, decimals = 1) => {
+    if (!+bytes) return '0 B';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
+// --- Image Processing Helper ---
+const processFile = (file: File, maxSizeBytes = 3 * 1024 * 1024): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    // If not image, check size strictly
+    if (!file.type.startsWith('image/')) {
+       if (file.size > maxSizeBytes) {
+           reject(new Error(`File too large (${(file.size/1024/1024).toFixed(1)}MB). Max allowed is ${(maxSizeBytes/1024/1024).toFixed(1)}MB.`));
+           return;
+       }
+       const reader = new FileReader();
+       reader.onload = () => resolve(reader.result as string);
+       reader.onerror = () => reject(new Error("Failed to read file"));
+       reader.readAsDataURL(file);
+       return;
+    }
+
+    // Image Compression
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // Resize logic: Max dimension 1280px
+            const MAX_DIM = 1280;
+            if (width > height) {
+                if (width > MAX_DIM) {
+                    height = Math.round(height * (MAX_DIM / width));
+                    width = MAX_DIM;
+                }
+            } else {
+                if (height > MAX_DIM) {
+                    width = Math.round(width * (MAX_DIM / height));
+                    height = MAX_DIM;
+                }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            
+            // Compress to WebP at 0.8 quality (supports transparency, good compression)
+            resolve(canvas.toDataURL('image/webp', 0.8));
+        };
+        img.onerror = () => reject(new Error("Invalid image file"));
+        img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
+};
+
+// --- Sub-Components ---
+
+const DocumentPreviewModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    block: BlockData | null; 
+}> = ({ isOpen, onClose, block }) => {
+    if (!isOpen || !block) return null;
+
+    // Enhanced image detection
+    const isImage = block.type === 'image' || 
+                   (block.url && (block.url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i) || block.url.startsWith('data:image')));
+    
+    // Get extension logic
+    const getExtension = () => {
+         if (block.content && block.content.includes('.')) {
+             const parts = block.content.split('.');
+             const ext = parts.pop();
+             if (ext && ext.length < 6) return ext.toUpperCase();
+         }
+         if (block.url && !block.url.startsWith('data:')) {
+             try {
+                const url = new URL(block.url);
+                const path = url.pathname;
+                if (path.includes('.')) {
+                    const ext = path.split('.').pop();
+                    if (ext && ext.length < 6) return ext.toUpperCase();
+                }
+             } catch (e) {}
+         }
+         return 'FILE';
+    };
+
+    const ext = getExtension();
+
+    // Premium Liquid Glass Theme Map - REDUCED OPACITY FOR TRANSPARENCY
+    const getTheme = () => {
+        const e = ext.toLowerCase();
+        if (e === 'pdf') return {
+            bg: 'bg-gradient-to-br from-[#450a0a]/40 via-[#ef4444]/5 to-[#450a0a]/40',
+            border: 'border-red-500/30',
+            icon: 'text-red-400',
+            glow: 'bg-red-500/30',
+            shadow: 'shadow-red-900/20'
+        };
+        if (['doc', 'docx'].includes(e)) return {
+            bg: 'bg-gradient-to-br from-[#172554]/40 via-[#3b82f6]/5 to-[#172554]/40',
+            border: 'border-blue-500/30',
+            icon: 'text-blue-400',
+            glow: 'bg-blue-500/30',
+            shadow: 'shadow-blue-900/20'
+        };
+        if (['xls', 'xlsx', 'csv'].includes(e)) return {
+            bg: 'bg-gradient-to-br from-[#064e3b]/40 via-[#10b981]/5 to-[#064e3b]/40',
+            border: 'border-emerald-500/30',
+            icon: 'text-emerald-400',
+            glow: 'bg-emerald-500/30',
+            shadow: 'shadow-emerald-900/20'
+        };
+        if (['ppt', 'pptx'].includes(e)) return {
+            bg: 'bg-gradient-to-br from-[#7c2d12]/40 via-[#f97316]/5 to-[#7c2d12]/40',
+            border: 'border-orange-500/30',
+            icon: 'text-orange-400',
+            glow: 'bg-orange-500/30',
+            shadow: 'shadow-orange-900/20'
+        };
+        if (['zip', 'rar', '7z'].includes(e)) return {
+            bg: 'bg-gradient-to-br from-[#713f12]/40 via-[#eab308]/5 to-[#713f12]/40',
+            border: 'border-yellow-500/30',
+            icon: 'text-yellow-400',
+            glow: 'bg-yellow-500/30',
+            shadow: 'shadow-yellow-900/20'
+        };
+        return {
+            bg: 'bg-gradient-to-br from-zinc-900/40 via-zinc-500/5 to-zinc-900/40',
+            border: 'border-white/10',
+            icon: 'text-zinc-400',
+            glow: 'bg-white/5',
+            shadow: 'shadow-black/40'
+        };
+    };
+    
+    const theme = getTheme();
+
+    const handleDownload = () => {
+        if (!block.url) return;
+        const link = document.createElement('a');
+        link.href = block.url;
+        link.download = block.title || `download.${ext.toLowerCase()}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleShare = async () => {
+        if (navigator.share && block.url) {
+            try {
+                await navigator.share({
+                    title: block.title,
+                    text: block.content,
+                    url: block.url
+                });
+            } catch (e) {
+                console.log('Share failed', e);
+            }
+        } else {
+            // Fallback
+            if (block.url) {
+                navigator.clipboard.writeText(block.url);
+                alert('Link copied to clipboard!');
+            }
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-sm transition-opacity" onClick={onClose} />
+            
+            {/* Ambient Background Blobs for the Modal Context */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                 <div className={`absolute top-1/4 left-1/4 w-96 h-96 ${theme.glow} rounded-full blur-[100px] animate-pulse opacity-40`} />
+                 <div className={`absolute bottom-1/4 right-1/4 w-96 h-96 ${theme.glow} rounded-full blur-[100px] animate-pulse delay-700 opacity-30`} />
+            </div>
+
+            <div className="relative w-full max-w-4xl h-[85vh] flex flex-col glass-panel rounded-[2.5rem] border border-white/10 shadow-2xl animate-in zoom-in-95 duration-500 overflow-hidden bg-[#09090b]/30 backdrop-blur-3xl">
+                
+                {/* Header */}
+                <div className="flex items-center justify-between p-6 border-b border-white/5 bg-white/5 backdrop-blur-md z-20">
+                    <div>
+                        <h3 className="text-xl font-bold text-white line-clamp-1 drop-shadow-md">{block.title}</h3>
+                        <p className="text-zinc-400 text-xs flex items-center gap-2 mt-1">
+                             {block.fileSize ? <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] text-white/80 font-mono border border-white/5">{block.fileSize}</span> : null}
+                             <span className="opacity-70">{block.content || `${ext} File`}</span>
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors group">
+                        <X className="w-6 h-6 text-zinc-400 group-hover:text-white group-hover:rotate-90 transition-all duration-300" />
+                    </button>
+                </div>
+
+                {/* Content Preview Area */}
+                <div className="flex-1 relative flex items-center justify-center p-8 overflow-hidden">
+                     {/* Background Grid/Noise */}
+                     <div className="absolute inset-0 opacity-10 pointer-events-none mix-blend-overlay" 
+                        style={{ 
+                            backgroundImage: 'linear-gradient(45deg, #444 25%, transparent 25%), linear-gradient(-45deg, #444 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #444 75%), linear-gradient(-45deg, transparent 75%, #444 75%)',
+                            backgroundSize: '24px 24px',
+                            backgroundPosition: '0 0, 0 12px, 12px -12px, -12px 0px'
+                        }} 
+                     />
+
+                     {isImage ? (
+                         <div className="relative group z-10 w-full h-full flex items-center justify-center">
+                            <div className="absolute inset-0 bg-black/50 blur-2xl -z-10 opacity-50" />
+                            <img 
+                                src={block.url || block.imageUrl} 
+                                alt={block.title} 
+                                className="max-w-full max-h-full object-contain shadow-2xl rounded-lg transition-transform duration-500 group-hover:scale-[1.01]"
+                            />
+                         </div>
+                     ) : (
+                         // Non-image Logic - The Premium Liquid Glass Card
+                         <div className="relative group z-10">
+                            {/* Card Glow */}
+                            <div className={`absolute -inset-8 rounded-full blur-3xl opacity-30 group-hover:opacity-50 transition-opacity duration-700 ${theme.glow}`} />
+                            
+                            {/* The Holographic Card - INCREASED BLUR & TRANSPARENCY */}
+                            <div className={`
+                                relative w-64 h-80 rounded-[2rem] 
+                                border ${theme.border} ${theme.bg}
+                                backdrop-blur-3xl ${theme.shadow}
+                                flex flex-col items-center justify-center
+                                overflow-hidden transition-all duration-500 
+                                group-hover:scale-105 group-hover:-translate-y-2 group-hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6)]
+                            `}>
+                                {/* Inner Liquid/Gloss Effects */}
+                                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
+                                
+                                {/* Diagonal Sheen Animation */}
+                                <div className="absolute -top-[100%] -left-[100%] w-[300%] h-[300%] bg-gradient-to-br from-transparent via-white/10 to-transparent rotate-45 group-hover:translate-x-[50%] group-hover:translate-y-[50%] transition-transform duration-1000 ease-out pointer-events-none" />
+                                
+                                {/* Icon Container with Inner Glow */}
+                                <div className={`mb-6 p-6 rounded-3xl bg-black/20 border border-white/5 shadow-inner backdrop-blur-sm relative overflow-hidden group-hover:scale-110 transition-transform duration-500`}>
+                                     <div className={`absolute inset-0 ${theme.glow} opacity-20 blur-md`} />
+                                     <FileText className={`w-16 h-16 ${theme.icon} drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] relative z-10`} />
+                                </div>
+                                
+                                <h4 className="text-3xl font-black text-white tracking-widest drop-shadow-lg scale-y-110">{ext}</h4>
+                                <div className="mt-3 h-px w-12 bg-white/20" />
+                                <span className="mt-3 text-[10px] font-bold text-white/60 uppercase tracking-[0.3em]">Document</span>
+                            </div>
+                         </div>
+                     )}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-6 border-t border-white/5 bg-black/20 flex justify-center gap-4 z-20 backdrop-blur-md">
+                     <button 
+                        onClick={handleDownload}
+                        className="flex items-center gap-2 px-8 py-3.5 rounded-2xl liquid-btn text-white font-bold hover:text-white border border-white/10 hover:border-white/30 shadow-lg hover:shadow-white/10 transition-all hover:scale-105 active:scale-95 group"
+                     >
+                        <Download className="w-4 h-4 group-hover:animate-bounce" />
+                        Download {ext !== 'FILE' ? ext : 'File'}
+                     </button>
+                     <button 
+                        onClick={handleShare}
+                        className="flex items-center gap-2 px-8 py-3.5 rounded-2xl liquid-btn text-zinc-300 font-bold hover:text-white border border-white/5 hover:border-white/20 transition-all hover:scale-105 active:scale-95"
+                     >
+                        <Share2 className="w-4 h-4" />
+                        Share
+                     </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Vault Add Item Modal ---
+
+interface VaultAddItemModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (data: BlockData) => void;
+}
+
+const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, onAdd }) => {
+  const [type, setType] = useState<'video' | 'link' | 'note' | 'document'>(() => {
+    try {
+        const saved = localStorage.getItem('bloxm_vault_add_tab');
+        return (saved as 'video' | 'link' | 'note' | 'document') || 'video';
+    } catch { return 'video'; }
+  });
+
+  const [url, setUrl] = useState('');
+  const [tag, setTag] = useState('');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [isFetching, setIsFetching] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<{name: string, data: string, type: string, sizeStr: string} | null>(null);
+  const [isManualTitle, setIsManualTitle] = useState(false);
+
+  const normalizeUrl = (input: string) => {
+      if (!input) return '';
+      if (input.match(/^https?:\/\//i)) return input;
+      return 'https://' + input;
+  };
+
+  const formatFileSize = (bytes: number) => {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  useEffect(() => {
+    if (!url || type === 'note' || type === 'document') {
+        setIsFetching(false);
+        if (!url && !isManualTitle && type !== 'note') setTitle('');
+        return;
+    }
+
+    if (isManualTitle) return;
+
+    const controller = new AbortController();
+    
+    const debounceTimer = setTimeout(async () => {
+       setIsFetching(true);
+       let fetchedTitle = null;
+       
+       try {
+          const fetchUrl = normalizeUrl(url);
+          const targetUrl = fetchUrl.toLowerCase();
+          const isOembedProvider = targetUrl.includes('youtube.com') || 
+                                   targetUrl.includes('youtu.be') || 
+                                   targetUrl.includes('vimeo.com') || 
+                                   targetUrl.includes('reddit.com');
+
+          if (isOembedProvider) {
+              try {
+                  const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(fetchUrl)}`, { signal: controller.signal });
+                  const data = await res.json();
+                  if (data.title && !data.error) {
+                      fetchedTitle = data.title;
+                  }
+              } catch (e) { /* ignore */ }
+          }
+
+          if (!fetchedTitle) {
+              try {
+                  const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(fetchUrl)}`, { signal: controller.signal });
+                  const microData = await microRes.json();
+                  
+                  if (microData.status === 'success') {
+                      const { title, description } = microData.data;
+                      const isSocialMedia = targetUrl.includes('instagram.com') || targetUrl.includes('tiktok.com') || targetUrl.includes('twitter.com') || targetUrl.includes('x.com');
+                      
+                      if (isSocialMedia) {
+                          if (targetUrl.includes('instagram.com') && description) {
+                                const captionMatch = description.match(/on Instagram:\s*["“](.*?)["”]/);
+                                if (captionMatch && captionMatch[1]) {
+                                    fetchedTitle = captionMatch[1];
+                                } else {
+                                     const isGenericStats = /^[0-9,.]+\s+(Likes|Comments)/i.test(description);
+                                     if (!description.includes('Log in') && !description.includes('Create an account') && !isGenericStats) {
+                                         fetchedTitle = description;
+                                     }
+                                }
+                          } else {
+                              if (description && !description.includes('Log in') && !description.includes('Create an account')) {
+                                   fetchedTitle = description;
+                              } else if (title && !title.includes('Log in') && !title.includes('Instagram') && !title.includes('TikTok') && !title.includes('X')) {
+                                   fetchedTitle = title;
+                              }
+                          }
+                          if (fetchedTitle && fetchedTitle.length > 65) {
+                              fetchedTitle = fetchedTitle.substring(0, 65) + '...';
+                          }
+                      } else {
+                          fetchedTitle = title || description;
+                      }
+                  }
+              } catch (e) { /* ignore */ }
+          }
+          
+       } catch (err) {
+       } finally {
+          if (!controller.signal.aborted) {
+              if (fetchedTitle) {
+                  setTitle(fetchedTitle);
+              } else {
+                  runHeuristic(normalizeUrl(url));
+              }
+              setIsFetching(false);
+          }
+       }
+    }, 800); 
+
+    return () => {
+        clearTimeout(debounceTimer);
+        controller.abort();
+    };
+  }, [url, type, isManualTitle]);
+
+  const runHeuristic = (val: string) => {
+     let fallback = 'Link Item';
+     try {
+         const lower = val.toLowerCase();
+         if (lower.includes('youtube') || lower.includes('youtu.be')) fallback = 'YouTube Video';
+         else if (lower.includes('vimeo')) fallback = 'Vimeo Video';
+         else if (lower.includes('tiktok')) fallback = 'TikTok Post';
+         else if (lower.includes('twitter') || lower.includes('x.com')) fallback = 'X Post';
+         else if (lower.includes('instagram')) fallback = 'Instagram Post';
+         else {
+            try {
+                const urlObj = new URL(val);
+                const domain = urlObj.hostname.replace('www.', '').split('.')[0];
+                if (domain) {
+                    fallback = domain.charAt(0).toUpperCase() + domain.slice(1);
+                    const path = urlObj.pathname.split('/').filter(Boolean).pop();
+                    if (path && path.length > 3) {
+                       fallback += ` - ${path.replace(/-/g, ' ')}`;
+                    }
+                }
+            } catch (e) { }
+         }
+     } catch(e) {}
+     setTitle(fallback);
+  };
+
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        try {
+            const sizeStr = formatFileSize(file.size);
+            // Use new compression utility
+            const dataUrl = await processFile(file);
+            setUploadedFile({ name: file.name, data: dataUrl, type: file.type, sizeStr });
+            if (!title) setTitle(file.name);
+        } catch (err: any) {
+            alert(err.message || "File could not be processed.");
+        }
+    }
+  };
+
+  const handleTypeChange = (newType: 'video' | 'link' | 'note' | 'document') => {
+      setType(newType);
+      localStorage.setItem('bloxm_vault_add_tab', newType);
+      setUrl('');
+      setTag('');
+      setTitle('');
+      setContent('');
+      setUploadedFile(null);
+      setIsFetching(false);
+      setIsManualTitle(false);
+  };
+
+  const handleSubmit = () => {
+    const id = Date.now().toString();
+    let block: BlockData;
+
+    if (type === 'note') {
+      block = {
+        id,
+        type: 'text',
+        size: '2x1',
+        title: title || 'Untitled Note',
+        content: content || 'No content...',
+        lastUpdated: Date.now()
+      };
+    } else {
+      let icon = 'globe';
+      let finalUrl = url;
+      let blockType: BlockType = 'social';
+      let imageUrl = undefined;
+      let faviconUrl = undefined;
+
+      if (type === 'document' && uploadedFile) {
+           finalUrl = uploadedFile.data;
+           if (uploadedFile.type.startsWith('image/')) {
+               blockType = 'image';
+               imageUrl = uploadedFile.data;
+           }
+      } else {
+           finalUrl = normalizeUrl(url);
+           try {
+               const domain = new URL(finalUrl).hostname;
+               faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+           } catch (e) {}
+      }
+
+      if (type === 'video') {
+         icon = 'video';
+         if (finalUrl.includes('twitter') || finalUrl.includes('x.com')) icon = 'twitter';
+         if (finalUrl.includes('instagram')) icon = 'instagram';
+         if (finalUrl.includes('tiktok')) icon = 'video';
+         if (finalUrl.includes('youtube')) icon = 'youtube';
+      } else if (type === 'link') {
+         icon = 'link';
+      } else if (type === 'document') {
+         icon = 'file-text';
+      }
+
+      block = {
+        id,
+        type: blockType,
+        size: '1x1',
+        title: title || (type === 'document' ? uploadedFile?.name : 'New Item'),
+        url: finalUrl,
+        iconName: icon,
+        imageUrl: imageUrl, 
+        faviconUrl: faviconUrl,
+        tags: [type === 'video' ? 'post' : type, tag, type === 'document' ? 'document' : ''].filter(Boolean),
+        lastUpdated: Date.now(),
+        content: type === 'document' ? uploadedFile?.name : undefined,
+        fileSize: type === 'document' ? uploadedFile?.sizeStr : undefined
+      };
+    }
+
+    onAdd(block);
+    setUrl('');
+    setTag('');
+    setTitle('');
+    setContent('');
+    setUploadedFile(null);
+    setIsFetching(false);
+    setIsManualTitle(false);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
+      
+      <div className="relative w-full max-w-lg glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-2xl font-bold text-white">Add to Vault</h3>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
+        </div>
+
+        <div className="flex bg-black/40 p-1 rounded-xl mb-6 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <button onClick={() => handleTypeChange('video')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'video' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
+            <Video className="w-4 h-4" /> Posts
+          </button>
+          <button onClick={() => handleTypeChange('link')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'link' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
+            <Globe className="w-4 h-4" /> Link
+          </button>
+           <button onClick={() => handleTypeChange('document')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'document' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
+            <FileText className="w-4 h-4" /> Doc
+          </button>
+          <button onClick={() => handleTypeChange('note')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'note' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
+            <StickyNote className="w-4 h-4" /> Note
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {type !== 'note' && (
+            <div>
+              <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
+                  {type === 'document' ? 'Upload Document' : 'URL Link'}
+              </label>
+              
+              {type === 'document' ? (
+                  <div className="border-2 border-dashed border-white/10 rounded-xl p-6 bg-black/20 hover:bg-black/40 hover:border-emerald-500/30 transition-all text-center group cursor-pointer relative">
+                      <input 
+                         type="file" 
+                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                         onChange={handleDocumentUpload}
+                      />
+                      <div className="flex flex-col items-center gap-2">
+                          <Upload className="w-8 h-8 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                          <p className="text-sm text-zinc-400 font-medium">{uploadedFile ? uploadedFile.name : 'Click to upload file'}</p>
+                          <p className="text-xs text-zinc-600">Max 3MB (Local)</p>
+                      </div>
+                  </div>
+              ) : (
+                <div className="relative group">
+                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                    <input 
+                        type="url" 
+                        value={url}
+                        onChange={e => setUrl(e.target.value)}
+                        className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                        placeholder="https://..."
+                        autoFocus
+                    />
+                    {isFetching && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+                        </div>
+                    )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="animate-in slide-in-from-bottom-2 duration-300">
+             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
+                {type === 'note' ? 'Note Title' : 'Display Title'}
+             </label>
+             <input 
+                type="text" 
+                value={title}
+                onChange={e => { setTitle(e.target.value); setIsManualTitle(true); }}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                placeholder="e.g. My Awesome Item"
+             />
+          </div>
+
+          {type === 'note' && (
+            <div className="animate-in slide-in-from-bottom-2 duration-300 delay-75">
+               <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Content</label>
+               <textarea 
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                  className="w-full h-32 bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none resize-none placeholder:text-zinc-600"
+                  placeholder="Write something..."
+               />
+            </div>
+          )}
+          
+          <div className="animate-in slide-in-from-bottom-2 duration-300 delay-100">
+             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Tag (Optional)</label>
+             <div className="relative group">
+                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                <input 
+                    type="text" 
+                    value={tag}
+                    onChange={e => setTag(e.target.value)}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                    placeholder="e.g. Work, Fun, Secret"
+                />
+             </div>
+          </div>
+          
+          <button 
+            onClick={handleSubmit}
+            disabled={(!url && type !== 'note' && !uploadedFile) || !title}
+            className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
+          >
+            Add Item
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Vault Edit Item Modal ---
+
+interface VaultEditItemModalProps {
+  isOpen: boolean;
+  block: BlockData | null;
+  onClose: () => void;
+  onSave: (updatedBlock: BlockData) => void;
+}
+
+const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, onClose, onSave }) => {
+    const [formData, setFormData] = useState<Partial<BlockData>>({});
+    const [tagInput, setTagInput] = useState('');
+
+    useEffect(() => {
+        if (block) {
+            setFormData({ ...block });
+            setTagInput(block.tags ? Array.from(new Set(block.tags)).join(', ') : '');
+        }
+    }, [block]);
+
+    if (!isOpen || !block) return null;
+
+    const isNote = block.type === 'text';
+
+    const handleSave = () => {
+        const rawTags = tagInput.split(',').map(t => t.trim()).filter(Boolean);
+        const tags = Array.from(new Set(rawTags)); // Deduplicate tags
+        onSave({ ...block, ...formData, tags } as BlockData);
+        onClose();
+    };
+    
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            try {
+                // Use new compression utility
+                const dataUrl = await processFile(file);
+                setFormData(prev => ({ ...prev, imageUrl: dataUrl }));
+            } catch (err: any) {
+                alert(err.message || "Failed to process image");
+            }
+        }
+    };
+
+    const isDataUri = (str?: string) => str?.startsWith('data:');
+
+    const labelStyle = "block text-[10px] font-bold text-zinc-500 mb-2 uppercase tracking-widest ml-1";
+    // CHANGED: Use solid bg-zinc-950 instead of transparent, no shadow-inner, ensure text doesn't conflict
+    const inputStyle = "w-full bg-zinc-950 border border-white/5 rounded-xl py-3.5 pl-4 pr-4 text-sm text-white focus:border-emerald-500/50 focus:bg-black focus:outline-none transition-all";
+
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
+            <div className="relative w-full max-w-md max-h-[85vh] overflow-y-auto custom-scrollbar glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-bold text-white">Edit Item</h3>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
+                </div>
+
+                <div className="space-y-5">
+                    <div>
+                        <label className={labelStyle}>Title</label>
+                        <div className="relative group">
+                            {/* REMOVED: Type Icon to fix overlap */}
+                            <input
+                                type="text"
+                                value={formData.title || ''}
+                                onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                                className={inputStyle} // Removed pl-11
+                                autoComplete="off" // Prevent browser autofill ghosting
+                                name="vault_edit_title"
+                            />
+                        </div>
+                    </div>
+
+                    {isNote ? (
+                         <div>
+                            <label className={labelStyle}>Content</label>
+                            <textarea
+                                value={formData.content || ''}
+                                onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                                className="w-full h-32 bg-zinc-950 border border-white/5 rounded-xl p-4 text-sm text-white focus:border-emerald-500/50 focus:bg-black focus:outline-none resize-none leading-relaxed"
+                                autoComplete="off"
+                                name="vault_edit_content"
+                            />
+                         </div>
+                    ) : (
+                        <div>
+                            <label className={labelStyle}>Link URL</label>
+                            {isDataUri(formData.url) ? (
+                                <div className="flex items-center justify-between w-full bg-zinc-900/50 border border-emerald-500/30 rounded-xl p-3">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                                        <span className="text-sm text-emerald-200 truncate">Embedded File Data</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => setFormData(prev => ({ ...prev, url: '' }))}
+                                        className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="relative group">
+                                    {/* REMOVED: Link Icon to fix overlap */}
+                                    <input
+                                        type="text"
+                                        value={formData.url || ''}
+                                        onChange={e => setFormData(prev => ({ ...prev, url: e.target.value }))}
+                                        className={inputStyle} // Removed pl-11
+                                        autoComplete="off"
+                                        name="vault_edit_url"
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div>
+                        <label className={labelStyle}>Tags (Comma Separated)</label>
+                        <div className="relative group">
+                            {/* REMOVED: Tag Icon to fix overlap */}
+                            <input
+                                type="text"
+                                value={tagInput}
+                                onChange={e => setTagInput(e.target.value)}
+                                className={inputStyle} // Removed pl-11
+                                autoComplete="off"
+                                name="vault_edit_tags"
+                            />
+                        </div>
+                    </div>
+
+                    {!isNote && (
+                         <div>
+                            <label className={labelStyle}>Appearance (Banner)</label>
+                            <div className="flex gap-3 mb-2">
+                                {isDataUri(formData.imageUrl) ? (
+                                     <div className="flex-1 flex items-center justify-between bg-zinc-900/50 border border-purple-500/30 rounded-xl p-3.5">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <ImageIcon className="w-4 h-4 text-purple-400 shrink-0" />
+                                            <span className="text-sm text-purple-200 truncate">Uploaded Image</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setFormData(prev => ({ ...prev, imageUrl: '' }))}
+                                            className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={formData.imageUrl || ''}
+                                        onChange={e => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
+                                        className={`${inputStyle} flex-1`}
+                                        autoComplete="off"
+                                        name="vault_edit_image_url"
+                                    />
+                                )}
+                                <label className="cursor-pointer bg-zinc-950/80 hover:bg-zinc-900 border border-white/5 hover:border-white/10 rounded-xl w-[50px] flex items-center justify-center transition-colors group">
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                                    <Upload className="w-5 h-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                                </label>
+                            </div>
+                            {/* Image Preview */}
+                            {formData.imageUrl && (
+                                <div className="h-32 w-full rounded-xl overflow-hidden border border-white/10 relative mt-2 group">
+                                    <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <span className="text-xs font-bold text-white bg-black/50 px-2 py-1 rounded-full border border-white/10">Preview</span>
+                                    </div>
+                                </div>
+                            )}
+                         </div>
+                    )}
+
+                    <button 
+                        onClick={handleSave}
+                        className="w-full py-3.5 mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20 transition-all hover:scale-[1.02] active:scale-95"
+                    >
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export const VaultSection: React.FC<VaultSectionProps> = ({ 
   folders, 
@@ -28,6 +891,11 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState(false);
   
+  // Verification state for switching Private -> Public
+  const [verifyPassword, setVerifyPassword] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'validating' | 'success' | 'error'>('idle');
+  const [showFolderPassword, setShowFolderPassword] = useState(false);
+
   // Unified Create/Edit Modal State
   const [folderModal, setFolderModal] = useState<{
     isOpen: boolean;
@@ -90,6 +958,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   // --- Folder Management ---
 
   const handleOpenCreate = () => {
+    setShowFolderPassword(false);
     setFolderModal({
       isOpen: true,
       mode: 'create',
@@ -98,6 +967,9 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   };
 
   const handleOpenEdit = (folder: VaultFolder) => {
+    setVerifyPassword('');
+    setVerificationStatus('idle');
+    setShowFolderPassword(false);
     setFolderModal({
       isOpen: true,
       mode: 'edit',
@@ -106,9 +978,50 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
     });
   };
 
+  // Helper to determine if we need verification UI
+  const showVerification = useMemo(() => {
+     if (folderModal.mode !== 'edit' || !folderModal.folderId) return false;
+     const original = (folders || []).find(f => f.id === folderModal.folderId);
+     return original?.type === 'private' && folderModal.data.type === 'public';
+  }, [folderModal, folders]);
+
+  // Debounced Password Validation Effect
+  useEffect(() => {
+    if (!verifyPassword) {
+        setVerificationStatus('idle');
+        return;
+    }
+    
+    if (showVerification) {
+        setVerificationStatus('validating');
+        const timer = setTimeout(() => {
+             const originalFolder = (folders || []).find(f => f.id === folderModal.folderId);
+             if (originalFolder && verifyPassword === originalFolder.password) {
+                 setVerificationStatus('success');
+             } else {
+                 setVerificationStatus('error');
+             }
+        }, 800); // 800ms delay to simulate loading check
+        return () => clearTimeout(timer);
+    }
+  }, [verifyPassword, showVerification, folders, folderModal.folderId]);
+
   const handleSaveFolder = () => {
     const { mode, data, folderId } = folderModal;
     if (!data.name) return;
+
+    // Validation logic for switching private -> public
+    if (mode === 'edit' && folderId) {
+        const originalFolder = (folders || []).find(f => f.id === folderId);
+        // If changing from Private to Public, verify password match or status
+        if (originalFolder?.type === 'private' && data.type === 'public') {
+            if (verifyPassword !== originalFolder.password) {
+                // If the user tries to save quickly before validation or with wrong pass
+                setVerificationStatus('error');
+                return; // Stop save
+            }
+        }
+    }
 
     if (mode === 'create') {
       const newFolder: VaultFolder = {
@@ -125,6 +1038,8 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
     }
 
     setFolderModal(prev => ({ ...prev, isOpen: false }));
+    setVerifyPassword('');
+    setVerificationStatus('idle');
   };
 
   const handleDeleteFolder = (id: string) => {
@@ -247,8 +1162,12 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   };
 
   const handleItemClick = (block: BlockData) => {
+      // Document previews handled by modal
       if (block.tags?.includes('document')) {
           setPreviewDocument(block);
+      } else if (block.url) {
+          // Manually handle redirection for other links because BentoItem intercepts the click
+          window.open(block.url, '_blank', 'noopener,noreferrer');
       }
   };
 
@@ -386,19 +1305,50 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
                     <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
                       {folderModal.mode === 'edit' ? 'Set/Update Password' : 'Set Password'}
                     </label>
-                    <input 
-                        type="text" // Visible text for easier setting
-                        value={folderModal.data.password || ''}
-                        onChange={e => setFolderModal(prev => ({ ...prev, data: { ...prev.data, password: e.target.value } }))}
-                        className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-red-500/50 focus:outline-none mt-1"
-                        placeholder="Required for access"
-                    />
+                    <div className="relative mt-1">
+                      <input 
+                          type={showFolderPassword ? "text" : "password"}
+                          value={folderModal.data.password || ''}
+                          onChange={e => setFolderModal(prev => ({ ...prev, data: { ...prev.data, password: e.target.value } }))}
+                          className="w-full bg-black/20 border border-white/10 rounded-xl p-3 pr-10 text-white focus:border-red-500/50 focus:outline-none"
+                          placeholder="Required for access"
+                      />
+                      <button
+                          type="button"
+                          onClick={() => setShowFolderPassword(!showFolderPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+                      >
+                          {showFolderPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                  </div>
+               )}
+
+               {/* Verification Input UI for Private -> Public Switch */}
+               {showVerification && (
+                  <div className={`animate-in slide-in-from-top-2 p-4 rounded-xl mt-4 border ${verificationStatus === 'success' ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-red-500/10 border-red-500/20'}`}>
+                      <label className={`text-xs font-bold uppercase ml-1 block mb-2 ${verificationStatus === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>Verify Password to Make Public</label>
+                      <div className="relative">
+                        <input 
+                            type="password"
+                            value={verifyPassword}
+                            onChange={e => setVerifyPassword(e.target.value)}
+                            className={`w-full bg-black/40 border ${verificationStatus === 'error' ? 'border-red-500' : (verificationStatus === 'success' ? 'border-emerald-500' : 'border-red-500/30')} rounded-xl p-3 text-white focus:outline-none pr-10 transition-colors`}
+                            placeholder="Current Folder Password"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                             {verificationStatus === 'validating' && <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />}
+                             {verificationStatus === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 animate-in zoom-in duration-300" />}
+                             {verificationStatus === 'error' && <XCircle className="w-5 h-5 text-red-400 animate-in zoom-in duration-300" />}
+                        </div>
+                      </div>
+                      {verificationStatus === 'error' && <p className="text-red-400 text-xs mt-2 ml-1 font-medium animate-in slide-in-from-top-1">Incorrect password</p>}
+                  </div>
                )}
 
                <button 
                   onClick={handleSaveFolder}
-                  disabled={!folderModal.data.name || (folderModal.data.type === 'private' && !folderModal.data.password)}
+                  disabled={!folderModal.data.name || (folderModal.data.type === 'private' && !folderModal.data.password) || (showVerification && verificationStatus !== 'success')}
                   className="w-full py-4 mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                >
                   {folderModal.mode === 'create' ? 'Create Folder' : 'Save Changes'}
@@ -533,7 +1483,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
            </div>
 
            {/* Grid Content */}
-           <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar relative z-10">
+           <div className="flex-1 overflow-y-auto p-4 md:p-8 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden relative z-10">
               <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 auto-rows-[180px] gap-6 pb-20">
                  {filteredItems?.map(block => (
                     <BentoItem 
@@ -600,702 +1550,4 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
       )}
     </div>
   );
-};
-
-// --- Internal Component: Document Preview Modal ---
-interface DocumentPreviewModalProps {
-    isOpen: boolean;
-    block: BlockData | null;
-    onClose: () => void;
-}
-
-const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ isOpen, block, onClose }) => {
-    if (!isOpen || !block) return null;
-
-    // Enhanced image detection
-    const isImage = block.type === 'image' || 
-                   (block.url && (block.url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i) || block.url.startsWith('data:image')));
-    
-    // Get extension logic
-    const getExtension = () => {
-         if (block.content && block.content.includes('.')) {
-             const parts = block.content.split('.');
-             const ext = parts.pop();
-             if (ext && ext.length < 6) return ext.toUpperCase();
-         }
-         if (block.url && !block.url.startsWith('data:')) {
-             try {
-                const url = new URL(block.url);
-                const path = url.pathname;
-                if (path.includes('.')) {
-                    const ext = path.split('.').pop();
-                    if (ext && ext.length < 6) return ext.toUpperCase();
-                }
-             } catch (e) {}
-         }
-         return 'FILE';
-    };
-
-    const ext = getExtension();
-
-    // Theme logic for placeholder based on extension
-    const getPlaceholderColor = () => {
-        const e = ext.toLowerCase();
-        if (e === 'pdf') return 'text-red-400 bg-red-500/10 border-red-500/20';
-        if (['doc', 'docx'].includes(e)) return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-        if (['xls', 'xlsx', 'csv'].includes(e)) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-        if (['ppt', 'pptx'].includes(e)) return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
-        if (['zip', 'rar', '7z'].includes(e)) return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
-        return 'text-zinc-400 bg-zinc-800 border-zinc-700';
-    };
-    
-    const themeClass = getPlaceholderColor();
-
-    const handleDownload = () => {
-        if (!block.url) return;
-        const link = document.createElement('a');
-        link.href = block.url;
-        link.download = block.title || `download.${ext.toLowerCase()}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const handleShare = async () => {
-        if (navigator.share && block.url) {
-            try {
-                await navigator.share({
-                    title: block.title,
-                    text: block.content,
-                    url: block.url
-                });
-            } catch (e) {
-                console.log('Share failed', e);
-            }
-        } else {
-            // Fallback
-            if (block.url) {
-                navigator.clipboard.writeText(block.url);
-                alert('Link copied to clipboard!');
-            }
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl transition-opacity" onClick={onClose} />
-            
-            <div className="relative w-full max-w-4xl h-[80vh] flex flex-col glass-panel rounded-[2rem] border border-white/10 shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-white/10 bg-black/20">
-                    <div>
-                        <h3 className="text-xl font-bold text-white line-clamp-1">{block.title}</h3>
-                        <p className="text-zinc-400 text-xs flex items-center gap-2">
-                             {block.fileSize ? <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] text-white/80 font-mono">{block.fileSize}</span> : null}
-                             <span>{block.content || `${ext} File`}</span>
-                        </p>
-                    </div>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
-                        <X className="w-6 h-6 text-zinc-400 hover:text-white" />
-                    </button>
-                </div>
-
-                {/* Content Preview */}
-                <div className="flex-1 bg-black/40 flex items-center justify-center p-8 relative overflow-hidden group">
-                     {/* Checkerboard pattern for transparency */}
-                     <div className="absolute inset-0 opacity-20" 
-                        style={{ 
-                            backgroundImage: 'linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%)',
-                            backgroundSize: '20px 20px',
-                            backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
-                        }} 
-                     />
-
-                     {isImage ? (
-                         <img 
-                            src={block.url || block.imageUrl} 
-                            alt={block.title} 
-                            className="max-w-full max-h-full object-contain shadow-2xl rounded-lg relative z-10 transition-transform duration-500 group-hover:scale-[1.02]"
-                         />
-                     ) : (
-                         <div className="flex flex-col items-center justify-center gap-6 relative z-10 animate-in fade-in zoom-in duration-500">
-                             {/* Premium File Card */}
-                             <div className={`w-40 h-52 rounded-2xl border shadow-2xl flex flex-col items-center justify-center relative overflow-hidden ${themeClass} backdrop-blur-md transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-2`}>
-                                  
-                                  {/* Gloss Effect */}
-                                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
-                                  <div className="absolute top-0 right-0 p-12 bg-white/5 rounded-full blur-xl translate-x-4 -translate-y-4" />
-
-                                  <FileText className="w-16 h-16 mb-4 opacity-80 drop-shadow-md" />
-                                  <span className="text-2xl font-black tracking-wider opacity-90 drop-shadow-md">{ext}</span>
-                                  
-                                  <div className="absolute bottom-4 text-[10px] font-mono opacity-50 uppercase tracking-widest">Document</div>
-                             </div>
-                             
-                             <div className="text-center max-w-md">
-                                <h4 className="text-white font-bold text-xl mb-2 drop-shadow-md">{block.title}</h4>
-                                <p className="text-zinc-400 text-sm font-medium">Preview unavailable for this format.</p>
-                             </div>
-                         </div>
-                     )}
-                </div>
-
-                {/* Footer Actions */}
-                <div className="p-6 border-t border-white/10 bg-black/20 flex justify-center gap-4">
-                     <button 
-                        onClick={handleDownload}
-                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-black font-bold hover:bg-zinc-200 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-white/5"
-                     >
-                        <Download className="w-4 h-4" />
-                        Download {ext !== 'FILE' ? ext : 'File'}
-                     </button>
-                     <button 
-                        onClick={handleShare}
-                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all hover:scale-105 active:scale-95 border border-white/5"
-                     >
-                        <Share2 className="w-4 h-4" />
-                        Share
-                     </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- Internal Component: Vault Add Item Modal ---
-
-interface VaultAddItemModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onAdd: (data: BlockData) => void;
-}
-
-const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, onAdd }) => {
-  // Initialize type from local storage or default to 'video'
-  const [type, setType] = useState<'video' | 'link' | 'note' | 'document'>(() => {
-    try {
-        const saved = localStorage.getItem('bloxm_vault_add_tab');
-        return (saved as 'video' | 'link' | 'note' | 'document') || 'video';
-    } catch { return 'video'; }
-  });
-
-  const [url, setUrl] = useState('');
-  const [tag, setTag] = useState('');
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [isFetching, setIsFetching] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<{name: string, data: string, type: string, sizeStr: string} | null>(null);
-
-  const normalizeUrl = (input: string) => {
-      if (!input) return '';
-      if (input.match(/^https?:\/\//i)) return input;
-      return 'https://' + input;
-  };
-
-  const formatFileSize = (bytes: number) => {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // Auto-fetch metadata when URL changes
-  useEffect(() => {
-    if (!url || type === 'note' || type === 'document') {
-        setIsFetching(false);
-        return;
-    }
-
-    // Prevent overwriting if user has typed a custom title
-    if (title.trim()) return;
-
-    const controller = new AbortController();
-    
-    const debounceTimer = setTimeout(async () => {
-       setIsFetching(true);
-       let fetchedTitle = null;
-       
-       try {
-          const fetchUrl = normalizeUrl(url);
-          const targetUrl = fetchUrl.toLowerCase();
-          const isOembedProvider = targetUrl.includes('youtube.com') || 
-                                   targetUrl.includes('youtu.be') || 
-                                   targetUrl.includes('vimeo.com') || 
-                                   targetUrl.includes('reddit.com');
-
-          if (isOembedProvider) {
-              try {
-                  const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(fetchUrl)}`, { signal: controller.signal });
-                  const data = await res.json();
-                  if (data.title && !data.error) {
-                      fetchedTitle = data.title;
-                  }
-              } catch (e) { /* ignore */ }
-          }
-
-          if (!fetchedTitle) {
-              try {
-                  const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(fetchUrl)}`, { signal: controller.signal });
-                  const microData = await microRes.json();
-                  
-                  if (microData.status === 'success') {
-                      const { title, description } = microData.data;
-                      const isSocialMedia = targetUrl.includes('instagram.com') || targetUrl.includes('tiktok.com') || targetUrl.includes('twitter.com') || targetUrl.includes('x.com');
-                      
-                      // Enhanced Social Media Logic
-                      if (isSocialMedia) {
-                          // Specific Instagram Caption Parsing
-                          if (targetUrl.includes('instagram.com') && description) {
-                                // Try to extract valid caption from "User on Instagram: "Caption...""
-                                const captionMatch = description.match(/on Instagram:\s*["“](.*?)["”]/);
-                                if (captionMatch && captionMatch[1]) {
-                                    fetchedTitle = captionMatch[1];
-                                } else {
-                                     // Fallback: Use description if it's NOT generic stats
-                                     const isGenericStats = /^[0-9,.]+\s+(Likes|Comments)/i.test(description);
-                                     if (!description.includes('Log in') && !description.includes('Create an account') && !isGenericStats) {
-                                         fetchedTitle = description;
-                                     }
-                                }
-                          } else {
-                              // Other socials (TikTok/Twitter)
-                              if (description && !description.includes('Log in') && !description.includes('Create an account')) {
-                                   fetchedTitle = description;
-                              } else if (title && !title.includes('Log in') && !title.includes('Instagram') && !title.includes('TikTok') && !title.includes('X')) {
-                                   fetchedTitle = title;
-                              }
-                          }
-
-                          // Truncate if we found something
-                          if (fetchedTitle && fetchedTitle.length > 65) {
-                              fetchedTitle = fetchedTitle.substring(0, 65) + '...';
-                          }
-                      } else {
-                          // Standard Websites
-                          fetchedTitle = title || description;
-                      }
-                  }
-              } catch (e) { /* ignore */ }
-          }
-          
-       } catch (err) {
-          // AbortError or other
-       } finally {
-          if (!controller.signal.aborted) {
-              if (fetchedTitle) {
-                  setTitle(fetchedTitle);
-              } else {
-                  runHeuristic(normalizeUrl(url));
-              }
-              setIsFetching(false);
-          }
-       }
-    }, 800); 
-
-    return () => {
-        clearTimeout(debounceTimer);
-        controller.abort();
-    };
-  }, [url, type]); 
-
-  const runHeuristic = (val: string) => {
-     let fallback = 'Link Item';
-     try {
-         const lower = val.toLowerCase();
-         
-         if (lower.includes('youtube') || lower.includes('youtu.be')) fallback = 'YouTube Video';
-         else if (lower.includes('vimeo')) fallback = 'Vimeo Video';
-         else if (lower.includes('tiktok')) fallback = 'TikTok Post';
-         else if (lower.includes('twitter') || lower.includes('x.com')) fallback = 'X Post';
-         else if (lower.includes('instagram')) fallback = 'Instagram Post';
-         else if (lower.includes('facebook')) fallback = 'Facebook Post';
-         else if (lower.includes('linkedin')) fallback = 'LinkedIn Post';
-         else {
-            try {
-                const urlObj = new URL(val);
-                const domain = urlObj.hostname.replace('www.', '').split('.')[0];
-                if (domain) {
-                    fallback = domain.charAt(0).toUpperCase() + domain.slice(1);
-                    const path = urlObj.pathname.split('/').filter(Boolean).pop();
-                    if (path && path.length > 3) {
-                       fallback += ` - ${path.replace(/-/g, ' ')}`;
-                    }
-                }
-            } catch (e) { /* ignore */ }
-         }
-     } catch(e) {
-         // Fallback if something throws in string manipulation (unlikely for strings but safety first)
-     }
-     setTitle(fallback);
-  };
-
-  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-         if (file.size > 5 * 1024 * 1024) {
-            alert("File size limit is 5MB for local storage.");
-            return;
-        }
-        const sizeStr = formatFileSize(file.size);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setUploadedFile({ name: file.name, data: reader.result as string, type: file.type, sizeStr });
-            if (!title) setTitle(file.name);
-        };
-        reader.readAsDataURL(file);
-    }
-  };
-
-  const handleTypeChange = (newType: 'video' | 'link' | 'note' | 'document') => {
-      setType(newType);
-      localStorage.setItem('bloxm_vault_add_tab', newType); // Persist selection
-      setUrl('');
-      setTag('');
-      setTitle('');
-      setContent('');
-      setUploadedFile(null);
-      setIsFetching(false);
-  };
-
-  const handleSubmit = () => {
-    const id = Date.now().toString();
-    let block: BlockData;
-
-    if (type === 'note') {
-      block = {
-        id,
-        type: 'text',
-        size: '2x1',
-        title: title || 'Untitled Note',
-        content: content || 'No content...',
-        lastUpdated: Date.now()
-      };
-    } else {
-      let icon = 'globe';
-      let finalUrl = url;
-      let blockType: BlockType = 'social';
-      let imageUrl = undefined;
-      let faviconUrl = undefined;
-
-      if (type === 'document' && uploadedFile) {
-           finalUrl = uploadedFile.data;
-           if (uploadedFile.type.startsWith('image/')) {
-               blockType = 'image';
-               imageUrl = uploadedFile.data;
-           }
-      } else {
-           finalUrl = normalizeUrl(url);
-           // Generate Favicon for links/posts
-           try {
-               const domain = new URL(finalUrl).hostname;
-               faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-           } catch (e) {}
-      }
-
-      if (type === 'video') { // UI says "Posts", internal state 'video'
-         icon = 'video';
-         // Heuristic for icon based on URL
-         if (finalUrl.includes('twitter') || finalUrl.includes('x.com')) icon = 'twitter';
-         if (finalUrl.includes('instagram')) icon = 'instagram';
-         if (finalUrl.includes('tiktok')) icon = 'video';
-         if (finalUrl.includes('youtube')) icon = 'youtube';
-      } else if (type === 'link') {
-         icon = 'link';
-      } else if (type === 'document') {
-         icon = 'file-text';
-      }
-
-      block = {
-        id,
-        type: blockType,
-        size: '1x1',
-        title: title || (type === 'document' ? uploadedFile?.name : 'New Item'),
-        url: finalUrl,
-        iconName: icon,
-        imageUrl: imageUrl, 
-        faviconUrl: faviconUrl,
-        tags: [type === 'video' ? 'post' : type, tag, type === 'document' ? 'document' : ''].filter(Boolean),
-        lastUpdated: Date.now(),
-        content: type === 'document' ? uploadedFile?.name : undefined,
-        fileSize: type === 'document' ? uploadedFile?.sizeStr : undefined
-      };
-    }
-
-    onAdd(block);
-    // Do not reset type here so the modal stays on the preferred tab next time it opens, 
-    // but we do want to clear fields. The persistence is handled in handleTypeChange.
-    // However, for UX, maybe we should keep the same tab? 
-    // The requirement says "next time open add item it shows doc list".
-    // So we don't reset `type` to 'video' anymore.
-    setUrl('');
-    setTag('');
-    setTitle('');
-    setContent('');
-    setUploadedFile(null);
-    setIsFetching(false);
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
-      
-      <div className="relative w-full max-w-lg glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-2xl font-bold text-white">Add to Vault</h3>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
-        </div>
-
-        {/* Custom Tabs */}
-        <div className="flex bg-black/40 p-1 rounded-xl mb-6 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <button onClick={() => handleTypeChange('video')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'video' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
-            <Video className="w-4 h-4" /> Posts
-          </button>
-          <button onClick={() => handleTypeChange('link')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'link' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
-            <Globe className="w-4 h-4" /> Link
-          </button>
-           <button onClick={() => handleTypeChange('document')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'document' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
-            <FileText className="w-4 h-4" /> Doc
-          </button>
-          <button onClick={() => handleTypeChange('note')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'note' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
-            <StickyNote className="w-4 h-4" /> Note
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          {type !== 'note' && (
-            <div>
-              <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
-                  {type === 'document' ? 'Upload Document' : 'URL Link'}
-              </label>
-              
-              {type === 'document' ? (
-                  <div className="border-2 border-dashed border-white/10 rounded-xl p-6 bg-black/20 hover:bg-black/40 hover:border-emerald-500/30 transition-all text-center group cursor-pointer relative">
-                      <input 
-                         type="file" 
-                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                         onChange={handleDocumentUpload}
-                      />
-                      <div className="flex flex-col items-center gap-2">
-                          <Upload className="w-8 h-8 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
-                          <p className="text-sm text-zinc-400 font-medium">{uploadedFile ? uploadedFile.name : 'Click to upload file'}</p>
-                          <p className="text-xs text-zinc-600">Max 5MB (Local)</p>
-                      </div>
-                  </div>
-              ) : (
-                <div className="relative group">
-                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                    <input 
-                        type="url" 
-                        value={url}
-                        onChange={e => setUrl(e.target.value)}
-                        className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
-                        placeholder="https://..."
-                        autoFocus
-                    />
-                    {isFetching && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                            <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
-                        </div>
-                    )}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="animate-in slide-in-from-bottom-2 duration-300">
-             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
-                {type === 'note' ? 'Note Title' : 'Display Title'}
-             </label>
-             <input 
-                type="text" 
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
-                placeholder="e.g. My Awesome Item"
-             />
-          </div>
-
-          {type === 'note' && (
-            <div className="animate-in slide-in-from-bottom-2 duration-300 delay-75">
-               <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Content</label>
-               <textarea 
-                  value={content}
-                  onChange={e => setContent(e.target.value)}
-                  className="w-full h-32 bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none resize-none placeholder:text-zinc-600"
-                  placeholder="Write something..."
-               />
-            </div>
-          )}
-          
-          <div className="animate-in slide-in-from-bottom-2 duration-300 delay-100">
-             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Tag (Optional)</label>
-             <div className="relative group">
-                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                <input 
-                    type="text" 
-                    value={tag}
-                    onChange={e => setTag(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
-                    placeholder="e.g. Work, Fun, Secret"
-                />
-             </div>
-          </div>
-          
-          <button 
-            onClick={handleSubmit}
-            disabled={(!url && type !== 'note' && !uploadedFile) || !title}
-            className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
-          >
-            Add Item
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Internal Component: Vault Edit Item Modal (Specialized) ---
-
-interface VaultEditItemModalProps {
-  isOpen: boolean;
-  block: BlockData | null;
-  onClose: () => void;
-  onSave: (updatedBlock: BlockData) => void;
-}
-
-const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, onClose, onSave }) => {
-    const [formData, setFormData] = useState<Partial<BlockData>>({});
-    const [tagInput, setTagInput] = useState('');
-
-    useEffect(() => {
-        if (block) {
-            setFormData({ ...block });
-            setTagInput(block.tags ? block.tags.join(', ') : '');
-        }
-    }, [block]);
-
-    if (!isOpen || !block) return null;
-
-    const isNote = block.type === 'text';
-
-    const handleSave = () => {
-        const tags = tagInput.split(',').map(t => t.trim()).filter(Boolean);
-        onSave({ ...block, ...formData, tags } as BlockData);
-        onClose();
-    };
-    
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const labelStyle = "block text-[10px] font-bold text-zinc-500 mb-2 uppercase tracking-widest ml-1";
-    const inputStyle = "w-full bg-zinc-950/80 border border-white/5 rounded-xl py-3.5 pl-4 pr-4 text-sm text-white placeholder:text-zinc-700 focus:border-emerald-500/50 focus:bg-black focus:outline-none transition-all shadow-inner";
-
-    return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
-            <div className="relative w-full max-w-md glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-2xl font-bold text-white">Edit Item</h3>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
-                </div>
-
-                <div className="space-y-5">
-                    <div>
-                        <label className={labelStyle}>Title</label>
-                        <div className="relative group">
-                            <Type className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                            <input
-                                type="text"
-                                value={formData.title || ''}
-                                onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                                className={`${inputStyle} pl-11`}
-                            />
-                        </div>
-                    </div>
-
-                    {isNote ? (
-                         <div>
-                            <label className={labelStyle}>Content</label>
-                            <textarea
-                                value={formData.content || ''}
-                                onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                                className="w-full h-32 bg-zinc-950/80 border border-white/5 rounded-xl p-4 text-sm text-white focus:border-emerald-500/50 focus:bg-black focus:outline-none resize-none leading-relaxed"
-                            />
-                         </div>
-                    ) : (
-                        <div>
-                            <label className={labelStyle}>Link URL</label>
-                            <div className="relative group">
-                                <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                                <input
-                                    type="text"
-                                    value={formData.url || ''}
-                                    onChange={e => setFormData(prev => ({ ...prev, url: e.target.value }))}
-                                    className={`${inputStyle} pl-11`}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    <div>
-                        <label className={labelStyle}>Tags (Comma Separated)</label>
-                        <div className="relative group">
-                            <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                            <input
-                                type="text"
-                                value={tagInput}
-                                onChange={e => setTagInput(e.target.value)}
-                                className={`${inputStyle} pl-11`}
-                                placeholder="work, urgent, ideas"
-                            />
-                        </div>
-                    </div>
-
-                    {!isNote && (
-                         <div>
-                            <label className={labelStyle}>Appearance (Banner)</label>
-                            <div className="flex gap-3 mb-2">
-                                <input
-                                    type="text"
-                                    value={formData.imageUrl || ''}
-                                    onChange={e => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
-                                    className={`${inputStyle} flex-1`}
-                                    placeholder="Image URL"
-                                />
-                                <label className="cursor-pointer bg-zinc-950/80 hover:bg-zinc-900 border border-white/5 hover:border-white/10 rounded-xl w-[50px] flex items-center justify-center transition-colors group">
-                                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                                    <Upload className="w-5 h-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
-                                </label>
-                            </div>
-                            {/* Image Preview */}
-                            {formData.imageUrl && (
-                                <div className="h-24 w-full rounded-xl overflow-hidden border border-white/10 relative">
-                                    <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                                </div>
-                            )}
-                         </div>
-                    )}
-
-                    <button 
-                        onClick={handleSave}
-                        className="w-full py-3.5 mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20"
-                    >
-                        Save Changes
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
 };

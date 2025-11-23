@@ -27,22 +27,14 @@
         scroll-behavior: smooth;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        /* Hide scrollbar for IE, Edge and Firefox */
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
       }
 
-      /* Custom Scrollbar */
+      /* Hide scrollbar for Chrome, Safari and Opera */
       ::-webkit-scrollbar {
-        width: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        transition: background 0.3s ease;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+        display: none;
       }
 
       /* Liquid Glass Core - Physics Based */
@@ -166,3 +158,4 @@
     <div id="root"></div>
   </body>
 </html>
+    
