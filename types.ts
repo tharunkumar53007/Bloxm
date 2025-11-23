@@ -15,6 +15,7 @@ export interface BlockData {
   status?: string;
   tags?: string[];
   lastUpdated?: number;
+  fileSize?: string;
 }
 
 export interface VaultFolder {

@@ -59,7 +59,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   // Folder Deletion State
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
 
-  const activeFolder = folders?.find(f => f && f.id === openFolderId);
+  const activeFolder = (folders || []).find(f => f && f.id === openFolderId);
 
   useEffect(() => {
     if (!openFolderId) {
@@ -265,7 +265,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
         (item.tags?.some(tag => tag && tag.toLowerCase().includes(q)))
       );
     });
-  }, [activeFolder, searchQuery]); // Dep: activeFolder covers activeFolder.items
+  }, [activeFolder, searchQuery]); 
 
   return (
     <div className="mt-24 mb-20 animate-in fade-in slide-in-from-bottom-10 duration-700">
@@ -560,7 +560,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
                         ) : (
                             <>
                                 <Shield className="w-12 h-12 mb-4 opacity-20" />
-                                <p>This folder is empty. {isSharedMode ? '' : 'Add items using the button above.'}</p>
+                                <p>This folder is empty. {isSharedMode ? 'Add items using the button above.' : ''}</p>
                             </>
                         )}
                     </div>
@@ -612,13 +612,50 @@ interface DocumentPreviewModalProps {
 const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ isOpen, block, onClose }) => {
     if (!isOpen || !block) return null;
 
-    const isImage = block.type === 'image' || (block.url && (block.url.match(/\.(jpeg|jpg|gif|png|webp)$/i) || block.url.startsWith('data:image')));
+    // Enhanced image detection
+    const isImage = block.type === 'image' || 
+                   (block.url && (block.url.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i) || block.url.startsWith('data:image')));
     
+    // Get extension logic
+    const getExtension = () => {
+         if (block.content && block.content.includes('.')) {
+             const parts = block.content.split('.');
+             const ext = parts.pop();
+             if (ext && ext.length < 6) return ext.toUpperCase();
+         }
+         if (block.url && !block.url.startsWith('data:')) {
+             try {
+                const url = new URL(block.url);
+                const path = url.pathname;
+                if (path.includes('.')) {
+                    const ext = path.split('.').pop();
+                    if (ext && ext.length < 6) return ext.toUpperCase();
+                }
+             } catch (e) {}
+         }
+         return 'FILE';
+    };
+
+    const ext = getExtension();
+
+    // Theme logic for placeholder based on extension
+    const getPlaceholderColor = () => {
+        const e = ext.toLowerCase();
+        if (e === 'pdf') return 'text-red-400 bg-red-500/10 border-red-500/20';
+        if (['doc', 'docx'].includes(e)) return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+        if (['xls', 'xlsx', 'csv'].includes(e)) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+        if (['ppt', 'pptx'].includes(e)) return 'text-orange-400 bg-orange-500/10 border-orange-500/20';
+        if (['zip', 'rar', '7z'].includes(e)) return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20';
+        return 'text-zinc-400 bg-zinc-800 border-zinc-700';
+    };
+    
+    const themeClass = getPlaceholderColor();
+
     const handleDownload = () => {
         if (!block.url) return;
         const link = document.createElement('a');
         link.href = block.url;
-        link.download = block.title || 'download';
+        link.download = block.title || `download.${ext.toLowerCase()}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -653,7 +690,10 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ isOpen, blo
                 <div className="flex items-center justify-between p-6 border-b border-white/10 bg-black/20">
                     <div>
                         <h3 className="text-xl font-bold text-white line-clamp-1">{block.title}</h3>
-                        <p className="text-zinc-400 text-xs">{block.content}</p>
+                        <p className="text-zinc-400 text-xs flex items-center gap-2">
+                             {block.fileSize ? <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] text-white/80 font-mono">{block.fileSize}</span> : null}
+                             <span>{block.content || `${ext} File`}</span>
+                        </p>
                     </div>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 transition-colors">
                         <X className="w-6 h-6 text-zinc-400 hover:text-white" />
@@ -661,7 +701,7 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ isOpen, blo
                 </div>
 
                 {/* Content Preview */}
-                <div className="flex-1 bg-black/40 flex items-center justify-center p-8 relative overflow-hidden">
+                <div className="flex-1 bg-black/40 flex items-center justify-center p-8 relative overflow-hidden group">
                      {/* Checkerboard pattern for transparency */}
                      <div className="absolute inset-0 opacity-20" 
                         style={{ 
@@ -675,12 +715,27 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ isOpen, blo
                          <img 
                             src={block.url || block.imageUrl} 
                             alt={block.title} 
-                            className="max-w-full max-h-full object-contain shadow-2xl rounded-lg relative z-10"
+                            className="max-w-full max-h-full object-contain shadow-2xl rounded-lg relative z-10 transition-transform duration-500 group-hover:scale-[1.02]"
                          />
                      ) : (
-                         <div className="flex flex-col items-center gap-4 relative z-10 text-zinc-400">
-                             <FileText className="w-24 h-24 opacity-50" />
-                             <p className="text-lg">Preview not available for this file type</p>
+                         <div className="flex flex-col items-center justify-center gap-6 relative z-10 animate-in fade-in zoom-in duration-500">
+                             {/* Premium File Card */}
+                             <div className={`w-40 h-52 rounded-2xl border shadow-2xl flex flex-col items-center justify-center relative overflow-hidden ${themeClass} backdrop-blur-md transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-2`}>
+                                  
+                                  {/* Gloss Effect */}
+                                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
+                                  <div className="absolute top-0 right-0 p-12 bg-white/5 rounded-full blur-xl translate-x-4 -translate-y-4" />
+
+                                  <FileText className="w-16 h-16 mb-4 opacity-80 drop-shadow-md" />
+                                  <span className="text-2xl font-black tracking-wider opacity-90 drop-shadow-md">{ext}</span>
+                                  
+                                  <div className="absolute bottom-4 text-[10px] font-mono opacity-50 uppercase tracking-widest">Document</div>
+                             </div>
+                             
+                             <div className="text-center max-w-md">
+                                <h4 className="text-white font-bold text-xl mb-2 drop-shadow-md">{block.title}</h4>
+                                <p className="text-zinc-400 text-sm font-medium">Preview unavailable for this format.</p>
+                             </div>
                          </div>
                      )}
                 </div>
@@ -689,14 +744,14 @@ const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({ isOpen, blo
                 <div className="p-6 border-t border-white/10 bg-black/20 flex justify-center gap-4">
                      <button 
                         onClick={handleDownload}
-                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-black font-bold hover:bg-zinc-200 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-white/5"
+                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white text-black font-bold hover:bg-zinc-200 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-white/5"
                      >
                         <Download className="w-4 h-4" />
-                        Download
+                        Download {ext !== 'FILE' ? ext : 'File'}
                      </button>
                      <button 
                         onClick={handleShare}
-                        className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all hover:scale-105 active:scale-95 border border-white/5"
+                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all hover:scale-105 active:scale-95 border border-white/5"
                      >
                         <Share2 className="w-4 h-4" />
                         Share
@@ -716,13 +771,34 @@ interface VaultAddItemModalProps {
 }
 
 const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, onAdd }) => {
-  const [type, setType] = useState<'video' | 'link' | 'note' | 'document'>('video');
+  // Initialize type from local storage or default to 'video'
+  const [type, setType] = useState<'video' | 'link' | 'note' | 'document'>(() => {
+    try {
+        const saved = localStorage.getItem('bloxm_vault_add_tab');
+        return (saved as 'video' | 'link' | 'note' | 'document') || 'video';
+    } catch { return 'video'; }
+  });
+
   const [url, setUrl] = useState('');
   const [tag, setTag] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isFetching, setIsFetching] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<{name: string, data: string, type: string} | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<{name: string, data: string, type: string, sizeStr: string} | null>(null);
+
+  const normalizeUrl = (input: string) => {
+      if (!input) return '';
+      if (input.match(/^https?:\/\//i)) return input;
+      return 'https://' + input;
+  };
+
+  const formatFileSize = (bytes: number) => {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   // Auto-fetch metadata when URL changes
   useEffect(() => {
@@ -741,17 +817,16 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
        let fetchedTitle = null;
        
        try {
-          const targetUrl = url.toLowerCase();
+          const fetchUrl = normalizeUrl(url);
+          const targetUrl = fetchUrl.toLowerCase();
           const isOembedProvider = targetUrl.includes('youtube.com') || 
                                    targetUrl.includes('youtu.be') || 
                                    targetUrl.includes('vimeo.com') || 
-                                   targetUrl.includes('twitter.com') || 
-                                   targetUrl.includes('x.com') ||
                                    targetUrl.includes('reddit.com');
 
           if (isOembedProvider) {
               try {
-                  const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+                  const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(fetchUrl)}`, { signal: controller.signal });
                   const data = await res.json();
                   if (data.title && !data.error) {
                       fetchedTitle = data.title;
@@ -761,11 +836,45 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
 
           if (!fetchedTitle) {
               try {
-                  const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+                  const microRes = await fetch(`https://api.microlink.io?url=${encodeURIComponent(fetchUrl)}`, { signal: controller.signal });
                   const microData = await microRes.json();
                   
-                  if (microData.status === 'success' && microData.data?.title) {
-                      fetchedTitle = microData.data.title;
+                  if (microData.status === 'success') {
+                      const { title, description } = microData.data;
+                      const isSocialMedia = targetUrl.includes('instagram.com') || targetUrl.includes('tiktok.com') || targetUrl.includes('twitter.com') || targetUrl.includes('x.com');
+                      
+                      // Enhanced Social Media Logic
+                      if (isSocialMedia) {
+                          // Specific Instagram Caption Parsing
+                          if (targetUrl.includes('instagram.com') && description) {
+                                // Try to extract valid caption from "User on Instagram: "Caption...""
+                                const captionMatch = description.match(/on Instagram:\s*["“](.*?)["”]/);
+                                if (captionMatch && captionMatch[1]) {
+                                    fetchedTitle = captionMatch[1];
+                                } else {
+                                     // Fallback: Use description if it's NOT generic stats
+                                     const isGenericStats = /^[0-9,.]+\s+(Likes|Comments)/i.test(description);
+                                     if (!description.includes('Log in') && !description.includes('Create an account') && !isGenericStats) {
+                                         fetchedTitle = description;
+                                     }
+                                }
+                          } else {
+                              // Other socials (TikTok/Twitter)
+                              if (description && !description.includes('Log in') && !description.includes('Create an account')) {
+                                   fetchedTitle = description;
+                              } else if (title && !title.includes('Log in') && !title.includes('Instagram') && !title.includes('TikTok') && !title.includes('X')) {
+                                   fetchedTitle = title;
+                              }
+                          }
+
+                          // Truncate if we found something
+                          if (fetchedTitle && fetchedTitle.length > 65) {
+                              fetchedTitle = fetchedTitle.substring(0, 65) + '...';
+                          }
+                      } else {
+                          // Standard Websites
+                          fetchedTitle = title || description;
+                      }
                   }
               } catch (e) { /* ignore */ }
           }
@@ -777,7 +886,7 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
               if (fetchedTitle) {
                   setTitle(fetchedTitle);
               } else {
-                  runHeuristic(url);
+                  runHeuristic(normalizeUrl(url));
               }
               setIsFetching(false);
           }
@@ -828,13 +937,25 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
             alert("File size limit is 5MB for local storage.");
             return;
         }
+        const sizeStr = formatFileSize(file.size);
         const reader = new FileReader();
         reader.onloadend = () => {
-            setUploadedFile({ name: file.name, data: reader.result as string, type: file.type });
+            setUploadedFile({ name: file.name, data: reader.result as string, type: file.type, sizeStr });
             if (!title) setTitle(file.name);
         };
         reader.readAsDataURL(file);
     }
+  };
+
+  const handleTypeChange = (newType: 'video' | 'link' | 'note' | 'document') => {
+      setType(newType);
+      localStorage.setItem('bloxm_vault_add_tab', newType); // Persist selection
+      setUrl('');
+      setTag('');
+      setTitle('');
+      setContent('');
+      setUploadedFile(null);
+      setIsFetching(false);
   };
 
   const handleSubmit = () => {
@@ -853,351 +974,328 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
     } else {
       let icon = 'globe';
       let finalUrl = url;
-      let blockImageUrl: string | undefined;
       let blockType: BlockType = 'social';
+      let imageUrl = undefined;
+      let faviconUrl = undefined;
 
-      if (type === 'document') {
-          icon = 'file-text';
-          finalUrl = uploadedFile ? uploadedFile.data : url;
-          if (uploadedFile && uploadedFile.type.startsWith('image/')) {
-              blockImageUrl = uploadedFile.data;
-              blockType = 'image'; // Switch to 'image' type for full visibility
-          }
-      } else if (url.includes('youtube') || url.includes('youtu.be')) icon = 'youtube';
-      else if (url.includes('vimeo')) icon = 'video';
-      else if (url.includes('twitch')) icon = 'twitch';
-      else if (url.includes('twitter') || url.includes('x.com')) icon = 'twitter';
-      else if (url.includes('instagram')) icon = 'instagram';
-      else if (url.includes('facebook')) icon = 'facebook';
-      else if (url.includes('spotify')) icon = 'spotify';
-      else if (type === 'video') icon = 'video';
-      else if (type === 'link') icon = 'link';
+      if (type === 'document' && uploadedFile) {
+           finalUrl = uploadedFile.data;
+           if (uploadedFile.type.startsWith('image/')) {
+               blockType = 'image';
+               imageUrl = uploadedFile.data;
+           }
+      } else {
+           finalUrl = normalizeUrl(url);
+           // Generate Favicon for links/posts
+           try {
+               const domain = new URL(finalUrl).hostname;
+               faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+           } catch (e) {}
+      }
 
-      // Generate favicon URL for links/videos (not uploads)
-      let faviconUrl;
-      if (type !== 'document' || !uploadedFile) {
-          try {
-            if (finalUrl && !finalUrl.startsWith('data:')) {
-                const hostname = new URL(finalUrl).hostname;
-                faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=128`;
-            }
-          } catch(e) { /* ignore */ }
+      if (type === 'video') { // UI says "Posts", internal state 'video'
+         icon = 'video';
+         // Heuristic for icon based on URL
+         if (finalUrl.includes('twitter') || finalUrl.includes('x.com')) icon = 'twitter';
+         if (finalUrl.includes('instagram')) icon = 'instagram';
+         if (finalUrl.includes('tiktok')) icon = 'video';
+         if (finalUrl.includes('youtube')) icon = 'youtube';
+      } else if (type === 'link') {
+         icon = 'link';
+      } else if (type === 'document') {
+         icon = 'file-text';
       }
 
       block = {
         id,
         type: blockType,
         size: '1x1',
-        title: title || (type === 'document' ? 'Document' : 'Link'),
+        title: title || (type === 'document' ? uploadedFile?.name : 'New Item'),
         url: finalUrl,
-        imageUrl: blockImageUrl,
         iconName: icon,
-        faviconUrl,
-        tags: tag ? [tag] : (type === 'document' ? ['document'] : []),
+        imageUrl: imageUrl, 
+        faviconUrl: faviconUrl,
+        tags: [type === 'video' ? 'post' : type, tag, type === 'document' ? 'document' : ''].filter(Boolean),
         lastUpdated: Date.now(),
-        content: blockType === 'image' ? (uploadedFile?.name || 'Image') : undefined
+        content: type === 'document' ? uploadedFile?.name : undefined,
+        fileSize: type === 'document' ? uploadedFile?.sizeStr : undefined
       };
     }
 
     onAdd(block);
+    // Do not reset type here so the modal stays on the preferred tab next time it opens, 
+    // but we do want to clear fields. The persistence is handled in handleTypeChange.
+    // However, for UX, maybe we should keep the same tab? 
+    // The requirement says "next time open add item it shows doc list".
+    // So we don't reset `type` to 'video' anymore.
     setUrl('');
     setTag('');
     setTitle('');
     setContent('');
     setUploadedFile(null);
+    setIsFetching(false);
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={onClose} />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
       
-      <div className="relative w-full max-w-md glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+      <div className="relative w-full max-w-lg glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
         <div className="flex justify-between items-center mb-6">
-           <h3 className="text-xl font-bold text-white">Add to Vault</h3>
-           <button onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button>
+          <h3 className="text-2xl font-bold text-white">Add to Vault</h3>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 p-1 bg-black/20 rounded-xl overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <button onClick={() => setType('video')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'video' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
-            <Video className="w-4 h-4" /> Video
+        {/* Custom Tabs */}
+        <div className="flex bg-black/40 p-1 rounded-xl mb-6 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <button onClick={() => handleTypeChange('video')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'video' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
+            <Video className="w-4 h-4" /> Posts
           </button>
-          <button onClick={() => setType('link')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'link' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <button onClick={() => handleTypeChange('link')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'link' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
             <Globe className="w-4 h-4" /> Link
           </button>
-          <button onClick={() => setType('document')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'document' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+           <button onClick={() => handleTypeChange('document')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'document' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
             <FileText className="w-4 h-4" /> Doc
           </button>
-          <button onClick={() => setType('note')} className={`flex-1 py-2 min-w-[80px] rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${type === 'note' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <button onClick={() => handleTypeChange('note')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap px-4 ${type === 'note' ? 'bg-emerald-500 text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}>
             <StickyNote className="w-4 h-4" /> Note
           </button>
         </div>
 
         <div className="space-y-4">
-          {/* Document Upload Area */}
-          {type === 'document' && (
-             <div className="mb-4">
-                <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-2 block">Upload File</label>
-                <div className="relative">
-                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/10 rounded-xl bg-black/20 hover:bg-black/40 hover:border-emerald-500/30 transition-all cursor-pointer group">
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <Upload className="w-6 h-6 mb-2 text-zinc-400 group-hover:text-emerald-400 transition-colors" />
-                            <p className="text-xs text-zinc-500 group-hover:text-zinc-300 text-center px-2 break-all">
-                                {uploadedFile ? uploadedFile.name : "Click to upload (PDF, Doc, etc)"}
-                            </p>
-                        </div>
-                        <input type="file" className="hidden" onChange={handleDocumentUpload} />
-                    </label>
-                </div>
-             </div>
-          )}
-
           {type !== 'note' && (
             <div>
-               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">
-                  {type === 'document' ? (uploadedFile ? 'Or Document URL (Ignored)' : 'Or Document URL') : 'URL Link'}
-               </label>
-               <div className="relative group">
-                 <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                 <input 
-                    type="url" 
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none disabled:opacity-50"
-                    placeholder={type === 'document' ? "https://example.com/file.pdf" : "https://..."}
-                    disabled={type === 'document' && !!uploadedFile}
-                    autoFocus={type !== 'document'}
-                 />
-               </div>
+              <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
+                  {type === 'document' ? 'Upload Document' : 'URL Link'}
+              </label>
+              
+              {type === 'document' ? (
+                  <div className="border-2 border-dashed border-white/10 rounded-xl p-6 bg-black/20 hover:bg-black/40 hover:border-emerald-500/30 transition-all text-center group cursor-pointer relative">
+                      <input 
+                         type="file" 
+                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                         onChange={handleDocumentUpload}
+                      />
+                      <div className="flex flex-col items-center gap-2">
+                          <Upload className="w-8 h-8 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                          <p className="text-sm text-zinc-400 font-medium">{uploadedFile ? uploadedFile.name : 'Click to upload file'}</p>
+                          <p className="text-xs text-zinc-600">Max 5MB (Local)</p>
+                      </div>
+                  </div>
+              ) : (
+                <div className="relative group">
+                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                    <input 
+                        type="url" 
+                        value={url}
+                        onChange={e => setUrl(e.target.value)}
+                        className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                        placeholder="https://..."
+                        autoFocus
+                    />
+                    {isFetching && (
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+                        </div>
+                    )}
+                </div>
+              )}
             </div>
           )}
 
-          <div>
-             <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 flex items-center justify-between">
-                {type === 'note' ? 'Note Title' : 'Title'}
-                {isFetching && <span className="flex items-center gap-1 text-emerald-400 normal-case"><Loader2 className="w-3 h-3 animate-spin" /> Fetching info...</span>}
+          <div className="animate-in slide-in-from-bottom-2 duration-300">
+             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
+                {type === 'note' ? 'Note Title' : 'Display Title'}
              </label>
-             <div className="relative">
-                <input 
-                    type="text" 
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none"
-                    placeholder={type === 'note' ? "My Secret Note" : "Item Title"}
-                />
-             </div>
+             <input 
+                type="text" 
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                placeholder="e.g. My Awesome Item"
+             />
           </div>
 
-          {type === 'video' && (
-            <div>
-               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">Tag (For future search)</label>
-               <div className="relative group">
-                 <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                 <input 
-                    type="text" 
-                    value={tag}
-                    onChange={(e) => setTag(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none"
-                    placeholder="e.g. inspiration, tutorial, music"
-                 />
-               </div>
-            </div>
-          )}
-
           {type === 'note' && (
-            <div>
-               <label className="text-xs font-bold text-zinc-500 uppercase ml-1 mb-1 block">Content</label>
+            <div className="animate-in slide-in-from-bottom-2 duration-300 delay-75">
+               <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Content</label>
                <textarea 
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  className="w-full h-24 bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none resize-none"
-                  placeholder="Type your note here..."
+                  onChange={e => setContent(e.target.value)}
+                  className="w-full h-32 bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none resize-none placeholder:text-zinc-600"
+                  placeholder="Write something..."
                />
             </div>
           )}
-
+          
+          <div className="animate-in slide-in-from-bottom-2 duration-300 delay-100">
+             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Tag (Optional)</label>
+             <div className="relative group">
+                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                <input 
+                    type="text" 
+                    value={tag}
+                    onChange={e => setTag(e.target.value)}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                    placeholder="e.g. Work, Fun, Secret"
+                />
+             </div>
+          </div>
+          
           <button 
             onClick={handleSubmit}
-            disabled={type !== 'note' && !url && !uploadedFile}
+            disabled={(!url && type !== 'note' && !uploadedFile) || !title}
             className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
           >
             Add Item
           </button>
         </div>
-
       </div>
     </div>
   );
 };
 
-// --- Internal Component: Vault Edit Item Modal (Specific) ---
+// --- Internal Component: Vault Edit Item Modal (Specialized) ---
 
 interface VaultEditItemModalProps {
   isOpen: boolean;
+  block: BlockData | null;
   onClose: () => void;
   onSave: (updatedBlock: BlockData) => void;
-  block: BlockData | null;
 }
 
-const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, onClose, onSave, block }) => {
-  const [formData, setFormData] = useState<Partial<BlockData>>({});
-  const [tagInput, setTagInput] = useState('');
-  const [showAppearance, setShowAppearance] = useState(false);
+const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, onClose, onSave }) => {
+    const [formData, setFormData] = useState<Partial<BlockData>>({});
+    const [tagInput, setTagInput] = useState('');
 
-  useEffect(() => {
-    if (block) {
-      setFormData({ ...block });
-      setTagInput(block.tags ? block.tags.join(', ') : '');
-    }
-  }, [block]);
+    useEffect(() => {
+        if (block) {
+            setFormData({ ...block });
+            setTagInput(block.tags ? block.tags.join(', ') : '');
+        }
+    }, [block]);
 
-  if (!isOpen || !block) return null;
+    if (!isOpen || !block) return null;
 
-  const handleSave = () => {
-     const tags = tagInput.split(',').map(t => t.trim()).filter(Boolean);
-     onSave({ ...block, ...formData, tags } as BlockData);
-     onClose();
-  };
+    const isNote = block.type === 'text';
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+    const handleSave = () => {
+        const tags = tagInput.split(',').map(t => t.trim()).filter(Boolean);
+        onSave({ ...block, ...formData, tags } as BlockData);
+        onClose();
+    };
+    
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData(prev => ({ ...prev, imageUrl: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
 
-  const isNote = block.type === 'text';
-  const labelStyle = "block text-[10px] font-bold text-zinc-500 mb-1 uppercase tracking-widest ml-1";
-  const inputStyle = "w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:bg-black/40 focus:outline-none transition-all";
+    const labelStyle = "block text-[10px] font-bold text-zinc-500 mb-2 uppercase tracking-widest ml-1";
+    const inputStyle = "w-full bg-zinc-950/80 border border-white/5 rounded-xl py-3.5 pl-4 pr-4 text-sm text-white placeholder:text-zinc-700 focus:border-emerald-500/50 focus:bg-black focus:outline-none transition-all shadow-inner";
 
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-xl" onClick={onClose} />
-      
-      <div className="relative w-full max-w-md glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 bg-[#09090b]/90">
-        <div className="flex justify-between items-center mb-6">
-           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-             Edit {isNote ? 'Note' : 'Item'}
-           </h3>
-           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full"><X className="w-5 h-5 text-zinc-400" /></button>
-        </div>
-
-        <div className="space-y-5">
-          {/* Title - Always shown */}
-          <div>
-            <label className={labelStyle}>Title</label>
-            <div className="relative group">
-                <Type className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                <input
-                    type="text"
-                    value={formData.title || ''}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className={`${inputStyle} pl-11`}
-                    placeholder="Item Title"
-                />
-            </div>
-          </div>
-
-          {/* URL - Only for non-notes */}
-          {!isNote && (
-            <div>
-                <label className={labelStyle}>URL Link</label>
-                <div className="relative group">
-                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                    <input
-                        type="url"
-                        value={formData.url || ''}
-                        onChange={(e) => setFormData({...formData, url: e.target.value})}
-                        className={`${inputStyle} pl-11`}
-                        placeholder="https://..."
-                    />
+    return (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
+            <div className="relative w-full max-w-md glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-bold text-white">Edit Item</h3>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
                 </div>
-            </div>
-          )}
 
-          {/* Content - For Notes or description */}
-          <div>
-            <label className={labelStyle}>{isNote ? 'Note Content' : 'Description (Optional)'}</label>
-            <textarea
-                value={formData.content || ''}
-                onChange={(e) => setFormData({...formData, content: e.target.value})}
-                className={`${inputStyle} h-32 resize-none`}
-                placeholder={isNote ? "Write your note..." : "Short description..."}
-            />
-          </div>
-
-          {/* Tags - Specific fix for Vault */}
-          <div>
-            <label className={labelStyle}>Tags (Comma separated)</label>
-            <div className="relative group">
-                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
-                <input
-                    type="text"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    className={`${inputStyle} pl-11`}
-                    placeholder="design, important, todo..."
-                />
-            </div>
-          </div>
-
-          {/* Appearance Toggle */}
-          <div className="pt-2">
-              <button 
-                onClick={() => setShowAppearance(!showAppearance)}
-                className="text-xs font-bold text-zinc-500 flex items-center gap-1 hover:text-emerald-400 transition-colors"
-              >
-                {showAppearance ? 'Hide Appearance' : 'Show Appearance'}
-              </button>
-              
-              {showAppearance && (
-                  <div className="mt-3 animate-in slide-in-from-top-2">
-                    <label className={labelStyle}>Custom Banner Image</label>
-                    <div className="flex gap-2">
-                        <div className="relative flex-1 group">
-                            <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                <div className="space-y-5">
+                    <div>
+                        <label className={labelStyle}>Title</label>
+                        <div className="relative group">
+                            <Type className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
                             <input
                                 type="text"
-                                value={formData.imageUrl || ''}
-                                onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
-                                className={`${inputStyle} pl-11 py-2 text-sm`}
-                                placeholder="https://..."
+                                value={formData.title || ''}
+                                onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                                className={`${inputStyle} pl-11`}
                             />
                         </div>
-                        <label className="cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl w-[46px] flex items-center justify-center transition-colors group">
-                            <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                            <Upload className="w-4 h-4 text-zinc-500 group-hover:text-emerald-400" />
-                        </label>
                     </div>
-                    {/* Image Preview Container */}
-                    {formData.imageUrl && (
-                        <div className="mt-2 relative h-32 w-full rounded-xl overflow-hidden border border-white/10 group">
-                           <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <p className="text-xs text-white font-medium">Preview</p>
-                           </div>
+
+                    {isNote ? (
+                         <div>
+                            <label className={labelStyle}>Content</label>
+                            <textarea
+                                value={formData.content || ''}
+                                onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                                className="w-full h-32 bg-zinc-950/80 border border-white/5 rounded-xl p-4 text-sm text-white focus:border-emerald-500/50 focus:bg-black focus:outline-none resize-none leading-relaxed"
+                            />
+                         </div>
+                    ) : (
+                        <div>
+                            <label className={labelStyle}>Link URL</label>
+                            <div className="relative group">
+                                <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                                <input
+                                    type="text"
+                                    value={formData.url || ''}
+                                    onChange={e => setFormData(prev => ({ ...prev, url: e.target.value }))}
+                                    className={`${inputStyle} pl-11`}
+                                />
+                            </div>
                         </div>
                     )}
-                  </div>
-              )}
-          </div>
 
-          <button 
-            onClick={handleSave}
-            className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            Save Changes
-          </button>
+                    <div>
+                        <label className={labelStyle}>Tags (Comma Separated)</label>
+                        <div className="relative group">
+                            <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400" />
+                            <input
+                                type="text"
+                                value={tagInput}
+                                onChange={e => setTagInput(e.target.value)}
+                                className={`${inputStyle} pl-11`}
+                                placeholder="work, urgent, ideas"
+                            />
+                        </div>
+                    </div>
+
+                    {!isNote && (
+                         <div>
+                            <label className={labelStyle}>Appearance (Banner)</label>
+                            <div className="flex gap-3 mb-2">
+                                <input
+                                    type="text"
+                                    value={formData.imageUrl || ''}
+                                    onChange={e => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
+                                    className={`${inputStyle} flex-1`}
+                                    placeholder="Image URL"
+                                />
+                                <label className="cursor-pointer bg-zinc-950/80 hover:bg-zinc-900 border border-white/5 hover:border-white/10 rounded-xl w-[50px] flex items-center justify-center transition-colors group">
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                                    <Upload className="w-5 h-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                                </label>
+                            </div>
+                            {/* Image Preview */}
+                            {formData.imageUrl && (
+                                <div className="h-24 w-full rounded-xl overflow-hidden border border-white/10 relative">
+                                    <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                                </div>
+                            )}
+                         </div>
+                    )}
+
+                    <button 
+                        onClick={handleSave}
+                        className="w-full py-3.5 mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20"
+                    >
+                        Save Changes
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
