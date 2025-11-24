@@ -10,8 +10,9 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { VaultSection } from './components/VaultSection';
 import { BlockData, BlockType, BlockSize, AuthState, ThemeConfig, VaultFolder } from './types';
-import { LogOut } from 'lucide-react';
+import { LogOut, Loader2 } from 'lucide-react';
 import { Logo } from './components/Logo';
+import { auth, onAuthStateChanged, logout } from './services/firebase';
 
 // Initial Default Data (Fallback)
 const DEFAULT_BLOCKS: BlockData[] = [
@@ -78,17 +79,8 @@ const sanitizeForShare = (data: any): any => {
 
 const App: React.FC = () => {
   // Auth State
-  const [auth, setAuth] = useState<AuthState>(() => {
-    try {
-      const savedUser = localStorage.getItem('bloxm_user');
-      return savedUser 
-        ? { isAuthenticated: true, user: JSON.parse(savedUser) }
-        : { isAuthenticated: false, user: null };
-    } catch (e) {
-      console.error("Failed to parse user data", e);
-      return { isAuthenticated: false, user: null };
-    }
-  });
+  const [authState, setAuthState] = useState<AuthState>({ isAuthenticated: false, user: null });
+  const [authLoading, setAuthLoading] = useState(true);
 
   // App State
   const [isEditing, setIsEditing] = useState(false);
@@ -105,34 +97,68 @@ const App: React.FC = () => {
   const [isBulkDelete, setIsBulkDelete] = useState(false); // Flag for bulk delete modal
   
   // Data State
-  const [blocks, setBlocks] = useState<BlockData[]>(() => {
-    try {
-      const savedBlocks = localStorage.getItem('bloxm_blocks');
-      return savedBlocks ? JSON.parse(savedBlocks) : DEFAULT_BLOCKS;
-    } catch (e) {
-      console.error("Failed to parse blocks", e);
-      return DEFAULT_BLOCKS;
-    }
-  });
+  const [blocks, setBlocks] = useState<BlockData[]>(DEFAULT_BLOCKS);
+  const [vaultFolders, setVaultFolders] = useState<VaultFolder[]>([]);
+  const [theme, setTheme] = useState<ThemeConfig>(DEFAULT_THEME);
 
-  const [vaultFolders, setVaultFolders] = useState<VaultFolder[]>(() => {
-    try {
-        const savedVault = localStorage.getItem('bloxm_vault');
-        return savedVault ? JSON.parse(savedVault) : [];
-    } catch (e) {
-        return [];
-    }
-  });
+  // Firebase Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        localStorage.removeItem('bloxm_guest_mode'); // Ensure guest mode flag is cleared if real auth happens
+        setAuthState({
+          isAuthenticated: true,
+          user: {
+            username: user.displayName || user.email?.split('@')[0] || 'User',
+            email: user.email || '',
+            avatar: user.photoURL || undefined
+          }
+        });
+      } else {
+        // Check for offline guest mode persistence
+        const isGuest = localStorage.getItem('bloxm_guest_mode') === 'true';
+        if (isGuest) {
+             setAuthState({
+                isAuthenticated: true,
+                user: {
+                    username: 'Guest',
+                    email: 'guest@bloxm.dev',
+                    avatar: undefined
+                }
+             });
+        } else {
+             // Only reset if we are NOT in guest mode
+             setAuthState(prev => prev.isAuthenticated && prev.user?.email === 'guest@bloxm.dev' ? prev : { isAuthenticated: false, user: null });
+        }
+      }
+      setAuthLoading(false);
+    });
 
-  const [theme, setTheme] = useState<ThemeConfig>(() => {
-    try {
-      const savedTheme = localStorage.getItem('bloxm_theme');
-      return savedTheme ? JSON.parse(savedTheme) : DEFAULT_THEME;
-    } catch (e) {
-      console.error("Failed to parse theme", e);
-      return DEFAULT_THEME;
+    return () => unsubscribe();
+  }, []);
+
+  // Load Data on Auth Success
+  useEffect(() => {
+    if (authState.isAuthenticated && !isSharedMode) {
+      try {
+        const savedBlocks = localStorage.getItem(`bloxm_blocks_${authState.user?.email}`);
+        const savedTheme = localStorage.getItem(`bloxm_theme_${authState.user?.email}`);
+        const savedVault = localStorage.getItem(`bloxm_vault_${authState.user?.email}`);
+
+        if (savedBlocks) setBlocks(JSON.parse(savedBlocks));
+        else setBlocks(DEFAULT_BLOCKS);
+
+        if (savedTheme) setTheme(JSON.parse(savedTheme));
+        else setTheme(DEFAULT_THEME);
+
+        if (savedVault) setVaultFolders(JSON.parse(savedVault));
+        else setVaultFolders([]);
+
+      } catch (e) {
+        console.error("Failed to load user data", e);
+      }
     }
-  });
+  }, [authState.isAuthenticated, authState.user?.email, isSharedMode]);
 
   // Check for Shared URL on Mount
   useEffect(() => {
@@ -168,32 +194,32 @@ const App: React.FC = () => {
               setTheme(decoded.theme);
               setVaultFolders(decoded.vaultFolders || []); 
               setIsSharedMode(true);
-              setAuth({
+              // Mock auth for shared view
+              setAuthState({
                 isAuthenticated: true,
                 user: decoded.user || { username: 'Guest', email: '' }
               });
+              setAuthLoading(false);
             }
         }
       } catch (error) {
         console.error("Failed to parse shared data", error);
-        // alert("The shared link is invalid or corrupted.");
       }
     }
   }, []);
 
-  // Persistence Effect
+  // Persistence Effect (Keyed by Email)
   useEffect(() => {
-    if (auth.isAuthenticated && !isSharedMode) {
+    if (authState.isAuthenticated && !isSharedMode && authState.user?.email) {
       try {
-        localStorage.setItem('bloxm_blocks', JSON.stringify(blocks));
-        localStorage.setItem('bloxm_theme', JSON.stringify(theme));
-        localStorage.setItem('bloxm_vault', JSON.stringify(vaultFolders));
+        localStorage.setItem(`bloxm_blocks_${authState.user.email}`, JSON.stringify(blocks));
+        localStorage.setItem(`bloxm_theme_${authState.user.email}`, JSON.stringify(theme));
+        localStorage.setItem(`bloxm_vault_${authState.user.email}`, JSON.stringify(vaultFolders));
       } catch (e) {
         console.warn("Storage Quota Exceeded. Data may not be saved.", e);
-        // We catch the error to prevent the app from crashing (White Screen / Black Screen)
       }
     }
-  }, [blocks, theme, vaultFolders, auth.isAuthenticated, isSharedMode]);
+  }, [blocks, theme, vaultFolders, authState.isAuthenticated, authState.user?.email, isSharedMode]);
 
   // Clear selection when exiting edit mode
   useEffect(() => {
@@ -202,15 +228,10 @@ const App: React.FC = () => {
     }
   }, [isEditing]);
 
-  const handleLogin = (email: string) => {
-    const user = { username: email.split('@')[0], email };
-    localStorage.setItem('bloxm_user', JSON.stringify(user));
-    setAuth({ isAuthenticated: true, user });
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('bloxm_user');
-    setAuth({ isAuthenticated: false, user: null });
+  const handleLogout = async () => {
+    await logout();
+    localStorage.removeItem('bloxm_guest_mode'); // Force clear guest persistence
+    setAuthState({ isAuthenticated: false, user: null }); 
     setIsEditing(false);
     setIsSharedMode(false);
     setIsLogoutConfirmOpen(false);
@@ -220,12 +241,20 @@ const App: React.FC = () => {
   const handleRemix = () => {
     setIsSharedMode(false);
     window.history.replaceState({}, '', window.location.pathname);
-    const localUser = localStorage.getItem('bloxm_user');
-    if (!localUser) {
-      setAuth({ isAuthenticated: false, user: null });
-    } else {
-      setAuth({ isAuthenticated: true, user: JSON.parse(localUser) });
-    }
+    // Force reload to trigger auth check or show login if not logged in
+    window.location.reload(); 
+  };
+  
+  const handleOfflineGuestLogin = () => {
+      localStorage.setItem('bloxm_guest_mode', 'true'); // Persist guest mode so refresh works
+      setAuthState({
+          isAuthenticated: true,
+          user: {
+              username: 'Guest',
+              email: 'guest@bloxm.dev',
+              avatar: undefined
+          }
+      });
   };
 
   const handleShare = async () => {
@@ -236,7 +265,7 @@ const App: React.FC = () => {
       blocks,
       theme,
       vaultFolders: publicFolders,
-      user: auth.user
+      user: authState.user
     };
 
     // SANITIZE: Remove massive data:image strings to prevent URL overflow
@@ -252,7 +281,7 @@ const App: React.FC = () => {
       
       // 2. Generate Visual ID structure
       const shareId = Math.random().toString(36).substr(2, 5);
-      const username = auth.user?.username || 'user';
+      const username = authState.user?.username || 'user';
       const shareSlug = `bloxm/${username}+${shareId}`;
       
       const baseUrl = window.location.origin + window.location.pathname;
@@ -463,8 +492,16 @@ const App: React.FC = () => {
     return ['bg-emerald-600/20', 'bg-teal-600/15', 'bg-cyan-500/10'];
   }, [theme.value]);
 
-  if (!auth.isAuthenticated) {
-    return <AuthScreen onLogin={handleLogin} />;
+  if (authLoading) {
+      return (
+        <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+            <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+        </div>
+      );
+  }
+
+  if (!authState.isAuthenticated) {
+    return <AuthScreen onBypassLogin={handleOfflineGuestLogin} />;
   }
 
   return (
@@ -490,7 +527,7 @@ const App: React.FC = () => {
         <div>
           <h2 className="text-white/60 font-medium tracking-widest text-xs uppercase mb-3 flex items-center gap-2 backdrop-blur-sm py-1 px-2 rounded-full bg-white/5 w-max border border-white/5">
              <span className={`w-2 h-2 rounded-full ${isSharedMode ? 'bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.5)]' : 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]'} inline-block`}></span>
-             {auth.user?.username}'s Hub {isSharedMode && '(Shared)'}
+             {authState.user?.username}'s Hub {isSharedMode && '(Shared)'}
           </h2>
           <div className="flex items-center gap-4">
             <h1 className="text-5xl md:text-6xl text-white drop-shadow-xl text-glow" style={{ fontFamily: "'Grand Hotel', cursive" }}>Bloxm</h1>

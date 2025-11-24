@@ -398,25 +398,55 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
         'pink': 'bg-gradient-to-br from-pink-900/40 via-pink-950/20 to-black/40 border-pink-500/20',
     };
 
+    // If it has a banner, render the Premium "Note Style" Layout (Notion-esque cover)
+    if (hasBanner) {
+         return (
+             <div className="flex flex-col h-full w-full bg-zinc-900 group relative overflow-hidden border border-white/5">
+                {/* Header Image */}
+                <div className="h-1/3 min-h-[60px] w-full relative overflow-hidden bg-black">
+                    <img 
+                        src={block.imageUrl} 
+                        alt="Banner" 
+                        loading="lazy"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    {/* Shadow gradient for depth */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/80 to-transparent pointer-events-none" />
+                </div>
+
+                {/* Content Body */}
+                <div className="flex-1 p-5 pt-3 flex flex-col relative min-h-0">
+                     {/* Floating Badge for Tags if any */}
+                     {block.tags && block.tags.length > 0 && (
+                        <div className="absolute -top-3 right-4 z-10">
+                            <span className="bg-zinc-800/90 backdrop-blur-md text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-full border border-white/5 shadow-lg shadow-black/20">
+                                #{block.tags[0]}
+                            </span>
+                        </div>
+                     )}
+
+                    <h3 className="text-lg font-bold text-white mb-2 line-clamp-1 drop-shadow-md">{block.title}</h3>
+                    <div 
+                        className="text-zinc-400 text-xs leading-relaxed line-clamp-3 prose prose-invert prose-p:my-0 break-words"
+                        dangerouslySetInnerHTML={{ __html: block.content || '' }}
+                    />
+                    
+                    {/* Footer Info */}
+                    <div className="mt-auto pt-4 flex items-center justify-between opacity-60 group-hover:opacity-100 transition-opacity border-t border-white/5">
+                        <span className="text-[10px] text-zinc-500 font-medium">Updated {formatLastUpdated(block.lastUpdated)}</span>
+                        {block.url && <ArrowUpRight className="w-3 h-3 text-zinc-500" />}
+                    </div>
+                </div>
+             </div>
+        );
+    }
+
+    // Default or Colored Note Style (No Image)
     const bgColor = block.status && colorMap[block.status] ? colorMap[block.status] : '';
 
     return (
       <div className={`flex flex-col justify-between h-full p-6 relative group overflow-hidden ${bgColor ? `${bgColor} border` : ''}`}>
-         {/* Banner Background */}
-         {hasBanner && (
-          <>
-             <img 
-                src={block.imageUrl} 
-                alt="" 
-                loading="lazy"
-                decoding="async"
-                className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:scale-105 transition-all duration-700" 
-             />
-             <div className="absolute inset-0 bg-gradient-to-br from-black/95 to-black/40" />
-          </>
-        )}
-
-         {!hasBanner && !bgColor && (
+         {!bgColor && (
             <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-zinc-100/5 blur-3xl rounded-full group-hover:bg-zinc-100/10 transition-colors duration-500" />
          )}
 

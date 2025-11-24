@@ -49,6 +49,7 @@ export const BentoItem: React.FC<BentoItemProps> = ({
   const [ghostSize, setGhostSize] = useState<{ w: number, h: number } | null>(null);
   const [previewGridSize, setPreviewGridSize] = useState<string | null>(null);
   const itemRef = useRef<HTMLDivElement>(null);
+  const ignoreClickRef = useRef(false);
   
   const sizeClass = getSizeClasses(block.size || '1x1');
   const [w, h] = (block.size || '1x1').split('x').map(Number);
@@ -138,6 +139,12 @@ export const BentoItem: React.FC<BentoItemProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       
+      // Prevent subsequent clicks on the overlay from triggering interactions immediately after resize
+      ignoreClickRef.current = true;
+      setTimeout(() => {
+          ignoreClickRef.current = false;
+      }, 300); // Increased timeout to prevent accidental clicks
+
       if (currentSnappedSize !== block.size) {
         onUpdate(block.id, { size: currentSnappedSize });
       }
@@ -149,6 +156,7 @@ export const BentoItem: React.FC<BentoItemProps> = ({
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (ignoreClickRef.current) return;
     if (isEditing && onToggleSelect) {
         const isModifier = e.ctrlKey || e.metaKey;
         onToggleSelect(block.id, isModifier);
@@ -221,7 +229,7 @@ export const BentoItem: React.FC<BentoItemProps> = ({
         {isEditing && (
           <div 
               className={`absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-20 transition-all duration-300 
-              ${isResizing ? 'opacity-0' : ''}
+              ${isResizing ? 'opacity-0 pointer-events-none' : ''}
               ${isSelected ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'} 
               `}
               onClick={handleOverlayClick}
