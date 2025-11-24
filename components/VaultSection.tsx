@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, SquarePen, Check, Search, CheckCircle2, Type, Image as ImageIcon, Upload, FileText, Download, Share2, ExternalLink, XCircle, Eye, EyeOff } from 'lucide-react';
+import { Folder, Lock, Unlock, Plus, X, Shield, FolderOpen, Settings, Trash2, Save, ArrowRight, Video, Globe, StickyNote, Link as LinkIcon, Tag, Loader2, SquarePen, Check, Search, CheckCircle2, Type, Image as ImageIcon, Upload, FileText, Download, Share2, ExternalLink, XCircle, Eye, EyeOff, Palette, ArrowLeft, Maximize2, AlignLeft, Bold, Italic, Underline, Strikethrough, List, ListOrdered, Undo, Redo, Highlighter } from 'lucide-react';
 import { BlockData, VaultFolder, BlockType, ThemeConfig } from '../types';
 import { BentoItem } from './BentoItem';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
@@ -100,6 +100,219 @@ const processFile = (file: File, maxSizeBytes = 3 * 1024 * 1024): Promise<string
 };
 
 // --- Sub-Components ---
+
+// Keeping definition for BlockRenderer compatibility, but unused in Note Editor UI now
+const NOTE_COLORS = [
+    { name: 'default', bg: 'bg-zinc-900', border: 'border-zinc-800', gradient: 'from-zinc-900 via-zinc-900 to-zinc-950', blob: 'bg-zinc-600' },
+    { name: 'red', bg: 'bg-red-900/50', border: 'border-red-500/50', gradient: 'from-red-950 via-red-900/30 to-black', blob: 'bg-red-600' },
+    { name: 'orange', bg: 'bg-orange-900/50', border: 'border-orange-500/50', gradient: 'from-orange-950 via-orange-900/30 to-black', blob: 'bg-orange-600' },
+    { name: 'yellow', bg: 'bg-yellow-900/50', border: 'border-yellow-500/50', gradient: 'from-yellow-950 via-yellow-900/30 to-black', blob: 'bg-yellow-600' },
+    { name: 'green', bg: 'bg-emerald-900/50', border: 'border-emerald-500/50', gradient: 'from-emerald-950 via-emerald-900/30 to-black', blob: 'bg-emerald-600' },
+    { name: 'teal', bg: 'bg-teal-900/50', border: 'border-teal-500/50', gradient: 'from-teal-950 via-teal-900/30 to-black', blob: 'bg-teal-600' },
+    { name: 'blue', bg: 'bg-blue-900/50', border: 'border-blue-500/50', gradient: 'from-blue-950 via-blue-900/30 to-black', blob: 'bg-blue-600' },
+    { name: 'purple', bg: 'bg-purple-900/50', border: 'border-purple-500/50', gradient: 'from-purple-950 via-purple-900/30 to-black', blob: 'bg-purple-600' },
+    { name: 'pink', bg: 'bg-pink-900/50', border: 'border-pink-500/50', gradient: 'from-pink-950 via-pink-900/30 to-black', blob: 'bg-pink-600' },
+];
+
+const TEXT_COLORS = [
+    { name: 'white', value: '#ffffff', class: 'bg-white' },
+    { name: 'zinc', value: '#a1a1aa', class: 'bg-zinc-400' },
+    { name: 'red', value: '#f87171', class: 'bg-red-400' },
+    { name: 'orange', value: '#fb923c', class: 'bg-orange-400' },
+    { name: 'amber', value: '#fbbf24', class: 'bg-amber-400' },
+    { name: 'emerald', value: '#34d399', class: 'bg-emerald-400' },
+    { name: 'cyan', value: '#22d3ee', class: 'bg-cyan-400' },
+    { name: 'blue', value: '#60a5fa', class: 'bg-blue-400' },
+    { name: 'violet', value: '#a78bfa', class: 'bg-violet-400' },
+    { name: 'pink', value: '#f472b6', class: 'bg-pink-400' },
+];
+
+interface VaultNotePageProps {
+    isOpen: boolean;
+    initialData?: BlockData | null;
+    onSave: (data: Partial<BlockData>) => void;
+    onClose: () => void;
+}
+
+const VaultNotePage: React.FC<VaultNotePageProps> = ({ isOpen, initialData, onSave, onClose }) => {
+    const [title, setTitle] = useState('');
+    const [tagInput, setTagInput] = useState('');
+    const [wordCount, setWordCount] = useState(0);
+    const editorRef = useRef<HTMLDivElement>(null);
+
+    // Initial Load
+    useEffect(() => {
+        if (isOpen) {
+            setTitle(initialData?.title || '');
+            setTagInput(initialData?.tags?.join(', ') || '');
+            // Directly set innerHTML to avoid React re-render lag loops
+            if (editorRef.current) {
+                editorRef.current.innerHTML = initialData?.content || '';
+                updateWordCount();
+            }
+        }
+    }, [isOpen, initialData]);
+
+    const updateWordCount = () => {
+        if (editorRef.current) {
+            const text = editorRef.current.innerText || '';
+            const count = text.trim().split(/\s+/).filter(Boolean).length;
+            setWordCount(count);
+        }
+    };
+
+    const handleSave = () => {
+        const content = editorRef.current?.innerHTML || '';
+        if (!title.trim() && !content.trim()) {
+            onClose();
+            return;
+        }
+        
+        const tags = tagInput.split(',').map(t => t.trim()).filter(Boolean);
+        
+        onSave({
+            title: title || 'Untitled Note',
+            content,
+            status: 'default', // Default status as we removed theme selection
+            tags: Array.from(new Set(tags))
+        });
+        onClose();
+    };
+
+    const execCmd = (command: string, value: string | undefined = undefined) => {
+        document.execCommand(command, false, value);
+        editorRef.current?.focus();
+        updateWordCount();
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[200] flex flex-col bg-black/30 backdrop-blur-xl animate-in fade-in duration-300 transform-gpu">
+            {/* Ambient noise texture for film grain feel */}
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay" />
+
+            {/* Content Container */}
+            <div className="relative z-10 flex-1 flex flex-col max-w-5xl mx-auto w-full h-full md:p-8">
+                
+                {/* Header Actions */}
+                <div className="flex items-center justify-between p-4 md:p-0 mb-6">
+                    <button 
+                        onClick={onClose}
+                        className="p-3 rounded-full hover:bg-white/10 text-zinc-300 hover:text-white transition-all group backdrop-blur-md border border-white/5 bg-black/20"
+                    >
+                        <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
+                    </button>
+
+                    <button 
+                        onClick={handleSave}
+                        className="flex items-center gap-2 px-8 py-3 rounded-full bg-white text-black font-bold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-95 transform-gpu"
+                    >
+                        <Save className="w-4 h-4" />
+                        <span>Save Note</span>
+                    </button>
+                </div>
+
+                {/* Editor Surface - Ultra Transparent Liquid Glass */}
+                <div className="flex-1 flex flex-col glass-panel md:rounded-[2rem] rounded-t-[2rem] border border-white/10 shadow-2xl backdrop-blur-3xl overflow-hidden bg-black/5 will-change-transform">
+                     
+                     {/* Title Input */}
+                     <input 
+                        type="text"
+                        placeholder="Untitled Note..."
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        className="w-full bg-transparent border-none text-4xl md:text-5xl font-bold text-white placeholder:text-white/20 focus:outline-none p-6 md:px-10 md:pt-10 md:pb-6 drop-shadow-sm"
+                        autoFocus
+                     />
+
+                     {/* Premium Toolbar */}
+                     <div className="px-6 md:px-10 flex flex-wrap items-center gap-2 border-b border-white/5 pb-4 mb-2">
+                        {/* History */}
+                        <div className="flex items-center bg-black/20 rounded-lg p-1 mr-2 border border-white/5">
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('undo'); }} className="p-2 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors" title="Undo">
+                                <Undo className="w-4 h-4" />
+                            </button>
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('redo'); }} className="p-2 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors" title="Redo">
+                                <Redo className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Formatting */}
+                        <div className="flex items-center bg-black/20 rounded-lg p-1 mr-2 border border-white/5">
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('bold'); }} className="p-2 rounded hover:bg-white/10 text-zinc-300 hover:text-white transition-colors" title="Bold">
+                                <Bold className="w-4 h-4" />
+                            </button>
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('italic'); }} className="p-2 rounded hover:bg-white/10 text-zinc-300 hover:text-white transition-colors" title="Italic">
+                                <Italic className="w-4 h-4" />
+                            </button>
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('underline'); }} className="p-2 rounded hover:bg-white/10 text-zinc-300 hover:text-white transition-colors" title="Underline">
+                                <Underline className="w-4 h-4" />
+                            </button>
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('strikeThrough'); }} className="p-2 rounded hover:bg-white/10 text-zinc-300 hover:text-white transition-colors" title="Strikethrough">
+                                <Strikethrough className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                         {/* Lists */}
+                        <div className="flex items-center bg-black/20 rounded-lg p-1 mr-2 border border-white/5">
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('insertUnorderedList'); }} className="p-2 rounded hover:bg-white/10 text-zinc-300 hover:text-white transition-colors" title="Bullet List">
+                                <List className="w-4 h-4" />
+                            </button>
+                            <button onMouseDown={(e) => { e.preventDefault(); execCmd('insertOrderedList'); }} className="p-2 rounded hover:bg-white/10 text-zinc-300 hover:text-white transition-colors" title="Numbered List">
+                                <ListOrdered className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Text Colors */}
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-black/20 rounded-lg border border-white/5 ml-auto md:ml-0 overflow-x-auto no-scrollbar max-w-[150px] md:max-w-none">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase mr-1">Color</span>
+                            {TEXT_COLORS.map(c => (
+                                <button
+                                    key={c.name}
+                                    onMouseDown={(e) => { e.preventDefault(); execCmd('foreColor', c.value); }}
+                                    className={`w-4 h-4 rounded-full ${c.class} hover:scale-125 transition-transform border border-white/10 shadow-sm`}
+                                    title={c.name}
+                                />
+                            ))}
+                        </div>
+                     </div>
+
+                     {/* Content Area - Uncontrolled & Optimized */}
+                     <div
+                        ref={editorRef}
+                        contentEditable
+                        className="flex-1 w-full bg-transparent border-none text-lg text-zinc-100 placeholder:text-zinc-500 focus:outline-none px-6 md:px-10 py-4 overflow-y-auto outline-none custom-scrollbar selection:bg-emerald-500/30 selection:text-white prose prose-invert max-w-none prose-p:my-2 prose-ul:list-disc prose-ul:pl-4 prose-ol:list-decimal prose-ol:pl-4 prose-headings:font-bold prose-headings:text-white"
+                        onInput={updateWordCount}
+                        spellCheck={false}
+                     />
+
+                     {/* Footer Metadata */}
+                     <div className="p-6 md:px-10 md:py-6 bg-black/20 border-t border-white/5 flex flex-col md:flex-row gap-4 items-center justify-between backdrop-blur-md">
+                         <div className="flex items-center gap-4 text-xs font-mono text-zinc-400">
+                             <span className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/5">
+                                <AlignLeft className="w-3 h-3" />
+                                {wordCount} Words
+                             </span>
+                         </div>
+
+                         <div className="flex items-center gap-3 w-full md:w-auto md:min-w-[300px] bg-black/30 rounded-xl px-4 py-3 border border-white/5 focus-within:border-white/20 transition-colors focus-within:bg-black/50">
+                            <Tag className="w-4 h-4 text-zinc-500" />
+                            <input 
+                                type="text"
+                                placeholder="Tags (e.g. ideas, work, personal)"
+                                value={tagInput}
+                                onChange={e => setTagInput(e.target.value)}
+                                className="bg-transparent border-none text-sm text-white placeholder:text-zinc-600 focus:outline-none w-full"
+                            />
+                         </div>
+                     </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const DocumentPreviewModal: React.FC<{ 
     isOpen: boolean; 
@@ -322,9 +535,10 @@ interface VaultAddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (data: BlockData) => void;
+  onOpenNoteStudio: () => void;
 }
 
-const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, onAdd }) => {
+const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, onAdd, onOpenNoteStudio }) => {
   const [type, setType] = useState<'video' | 'link' | 'note' | 'document'>(() => {
     try {
         const saved = localStorage.getItem('bloxm_vault_add_tab');
@@ -335,7 +549,6 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
   const [url, setUrl] = useState('');
   const [tag, setTag] = useState('');
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
   const [isFetching, setIsFetching] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{name: string, data: string, type: string, sizeStr: string} | null>(null);
   const [isManualTitle, setIsManualTitle] = useState(false);
@@ -355,7 +568,7 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
   };
 
   useEffect(() => {
-    if (!url || type === 'note' || type === 'document') {
+    if (!url || (type as string) === 'note' || type === 'document') {
         setIsFetching(false);
         if (!url && !isManualTitle && type !== 'note') setTitle('');
         return;
@@ -490,59 +703,48 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
       setUrl('');
       setTag('');
       setTitle('');
-      setContent('');
       setUploadedFile(null);
       setIsFetching(false);
       setIsManualTitle(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (data?: Partial<BlockData>) => {
     const id = Date.now().toString();
-    let block: BlockData;
+    
+    // Default handler for other types
+    let icon = 'globe';
+    let finalUrl = url;
+    let blockType: BlockType = 'social';
+    let imageUrl = undefined;
+    let faviconUrl = undefined;
 
-    if (type === 'note') {
-      block = {
-        id,
-        type: 'text',
-        size: '2x1',
-        title: title || 'Untitled Note',
-        content: content || 'No content...',
-        lastUpdated: Date.now()
-      };
+    if (type === 'document' && uploadedFile) {
+        finalUrl = uploadedFile.data;
+        if (uploadedFile.type.startsWith('image/')) {
+            blockType = 'image';
+            imageUrl = uploadedFile.data;
+        }
     } else {
-      let icon = 'globe';
-      let finalUrl = url;
-      let blockType: BlockType = 'social';
-      let imageUrl = undefined;
-      let faviconUrl = undefined;
+        finalUrl = normalizeUrl(url);
+        try {
+            const domain = new URL(finalUrl).hostname;
+            faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+        } catch (e) {}
+    }
 
-      if (type === 'document' && uploadedFile) {
-           finalUrl = uploadedFile.data;
-           if (uploadedFile.type.startsWith('image/')) {
-               blockType = 'image';
-               imageUrl = uploadedFile.data;
-           }
-      } else {
-           finalUrl = normalizeUrl(url);
-           try {
-               const domain = new URL(finalUrl).hostname;
-               faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-           } catch (e) {}
-      }
+    if (type === 'video') {
+        icon = 'video';
+        if (finalUrl.includes('twitter') || finalUrl.includes('x.com')) icon = 'twitter';
+        if (finalUrl.includes('instagram')) icon = 'instagram';
+        if (finalUrl.includes('tiktok')) icon = 'video';
+        if (finalUrl.includes('youtube')) icon = 'youtube';
+    } else if (type === 'link') {
+        icon = 'link';
+    } else if (type === 'document') {
+        icon = 'file-text';
+    }
 
-      if (type === 'video') {
-         icon = 'video';
-         if (finalUrl.includes('twitter') || finalUrl.includes('x.com')) icon = 'twitter';
-         if (finalUrl.includes('instagram')) icon = 'instagram';
-         if (finalUrl.includes('tiktok')) icon = 'video';
-         if (finalUrl.includes('youtube')) icon = 'youtube';
-      } else if (type === 'link') {
-         icon = 'link';
-      } else if (type === 'document') {
-         icon = 'file-text';
-      }
-
-      block = {
+    const block: BlockData = {
         id,
         type: blockType,
         size: '1x1',
@@ -555,18 +757,21 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
         lastUpdated: Date.now(),
         content: type === 'document' ? uploadedFile?.name : undefined,
         fileSize: type === 'document' ? uploadedFile?.sizeStr : undefined
-      };
-    }
+    };
 
     onAdd(block);
     setUrl('');
     setTag('');
     setTitle('');
-    setContent('');
     setUploadedFile(null);
     setIsFetching(false);
     setIsManualTitle(false);
     onClose();
+  };
+
+  const handleEnterNoteStudio = () => {
+      onOpenNoteStudio();
+      onClose();
   };
 
   if (!isOpen) return null;
@@ -575,7 +780,7 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
       
-      <div className="relative w-full max-w-lg glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+      <div className={`relative w-full ${type === 'note' ? 'max-w-2xl' : 'max-w-lg'} glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 transition-all duration-300`}>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-bold text-white">Add to Vault</h3>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
@@ -596,94 +801,98 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
           </button>
         </div>
 
-        <div className="space-y-4">
-          {type !== 'note' && (
+        {type === 'note' ? (
+             <div className="animate-in fade-in slide-in-from-bottom-2 text-center py-8">
+                 <div className="w-20 h-20 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border border-white/5">
+                    <SquarePen className="w-8 h-8 text-emerald-300" />
+                 </div>
+                 <h4 className="text-xl font-bold text-white mb-2">Create a New Note</h4>
+                 <p className="text-zinc-400 text-sm mb-8 max-w-xs mx-auto">Open the full-screen Note Studio for a distraction-free writing experience.</p>
+                 
+                 <button 
+                    onClick={handleEnterNoteStudio}
+                    className="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-900/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                 >
+                    <Maximize2 className="w-4 h-4" />
+                    Enter Note Studio
+                 </button>
+             </div>
+        ) : (
+            <div className="space-y-4">
             <div>
-              <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
-                  {type === 'document' ? 'Upload Document' : 'URL Link'}
-              </label>
-              
-              {type === 'document' ? (
-                  <div className="border-2 border-dashed border-white/10 rounded-xl p-6 bg-black/20 hover:bg-black/40 hover:border-emerald-500/30 transition-all text-center group cursor-pointer relative">
-                      <input 
-                         type="file" 
-                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                         onChange={handleDocumentUpload}
-                      />
-                      <div className="flex flex-col items-center gap-2">
-                          <Upload className="w-8 h-8 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
-                          <p className="text-sm text-zinc-400 font-medium">{uploadedFile ? uploadedFile.name : 'Click to upload file'}</p>
-                          <p className="text-xs text-zinc-600">Max 3MB (Local)</p>
-                      </div>
-                  </div>
-              ) : (
-                <div className="relative group">
-                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
-                    <input 
-                        type="url" 
-                        value={url}
-                        onChange={e => setUrl(e.target.value)}
-                        className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
-                        placeholder="https://..."
-                        autoFocus
-                    />
-                    {isFetching && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                            <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
+                    {type === 'document' ? 'Upload Document' : 'URL Link'}
+                </label>
+                
+                {type === 'document' ? (
+                    <div className="border-2 border-dashed border-white/10 rounded-xl p-6 bg-black/20 hover:bg-black/40 hover:border-emerald-500/30 transition-all text-center group cursor-pointer relative">
+                        <input 
+                            type="file" 
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            onChange={handleDocumentUpload}
+                        />
+                        <div className="flex flex-col items-center gap-2">
+                            <Upload className="w-8 h-8 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                            <p className="text-sm text-zinc-400 font-medium">{uploadedFile ? uploadedFile.name : 'Click to upload file'}</p>
+                            <p className="text-xs text-zinc-600">Max 3MB (Local)</p>
                         </div>
-                    )}
-                </div>
-              )}
+                    </div>
+                ) : (
+                    <div className="relative group">
+                        <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                        <input 
+                            type="url" 
+                            value={url}
+                            onChange={e => setUrl(e.target.value)}
+                            className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                            placeholder="https://..."
+                            autoFocus
+                        />
+                        {isFetching && (
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
-          )}
 
-          <div className="animate-in slide-in-from-bottom-2 duration-300">
-             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
-                {type === 'note' ? 'Note Title' : 'Display Title'}
-             </label>
-             <input 
-                type="text" 
-                value={title}
-                onChange={e => { setTitle(e.target.value); setIsManualTitle(true); }}
-                className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
-                placeholder="e.g. My Awesome Item"
-             />
-          </div>
-
-          {type === 'note' && (
-            <div className="animate-in slide-in-from-bottom-2 duration-300 delay-75">
-               <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Content</label>
-               <textarea 
-                  value={content}
-                  onChange={e => setContent(e.target.value)}
-                  className="w-full h-32 bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none resize-none placeholder:text-zinc-600"
-                  placeholder="Write something..."
-               />
-            </div>
-          )}
-          
-          <div className="animate-in slide-in-from-bottom-2 duration-300 delay-100">
-             <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Tag (Optional)</label>
-             <div className="relative group">
-                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+            <div className="animate-in slide-in-from-bottom-2 duration-300">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">
+                    Display Title
+                </label>
                 <input 
                     type="text" 
-                    value={tag}
-                    onChange={e => setTag(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
-                    placeholder="e.g. Work, Fun, Secret"
+                    value={title}
+                    onChange={e => { setTitle(e.target.value); setIsManualTitle(true); }}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                    placeholder="e.g. My Awesome Item"
                 />
-             </div>
-          </div>
-          
-          <button 
-            onClick={handleSubmit}
-            disabled={(!url && type !== 'note' && !uploadedFile) || !title}
-            className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
-          >
-            Add Item
-          </button>
-        </div>
+            </div>
+
+            <div className="animate-in slide-in-from-bottom-2 duration-300 delay-100">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1 mb-1 block">Tag (Optional)</label>
+                <div className="relative group">
+                    <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+                    <input 
+                        type="text" 
+                        value={tag}
+                        onChange={e => setTag(e.target.value)}
+                        className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:border-emerald-500/50 focus:outline-none placeholder:text-zinc-600"
+                        placeholder="e.g. Work, Fun, Secret"
+                    />
+                </div>
+            </div>
+            
+            <button 
+                onClick={() => handleSubmit()}
+                disabled={(!url && !uploadedFile) || !title}
+                className="w-full py-4 mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-900/20"
+            >
+                Add Item
+            </button>
+            </div>
+        )}
       </div>
     </div>
   );
@@ -696,9 +905,10 @@ interface VaultEditItemModalProps {
   block: BlockData | null;
   onClose: () => void;
   onSave: (updatedBlock: BlockData) => void;
+  onOpenNoteStudio: (block: BlockData) => void;
 }
 
-const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, onClose, onSave }) => {
+const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, onClose, onSave, onOpenNoteStudio }) => {
     const [formData, setFormData] = useState<Partial<BlockData>>({});
     const [tagInput, setTagInput] = useState('');
 
@@ -713,7 +923,7 @@ const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, 
 
     const isNote = block.type === 'text';
 
-    const handleSave = () => {
+    const handleSave = (data?: Partial<BlockData>) => {
         const rawTags = tagInput.split(',').map(t => t.trim()).filter(Boolean);
         const tags = Array.from(new Set(rawTags)); // Deduplicate tags
         onSave({ ...block, ...formData, tags } as BlockData);
@@ -733,146 +943,156 @@ const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, 
         }
     };
 
+    const handleEditInStudio = () => {
+        if (block) {
+            onOpenNoteStudio(block);
+            onClose();
+        }
+    };
+
     const isDataUri = (str?: string) => str?.startsWith('data:');
 
     const labelStyle = "block text-[10px] font-bold text-zinc-500 mb-2 uppercase tracking-widest ml-1";
-    // CHANGED: Use solid bg-zinc-950 instead of transparent, no shadow-inner, ensure text doesn't conflict
     const inputStyle = "w-full bg-zinc-950 border border-white/5 rounded-xl py-3.5 pl-4 pr-4 text-sm text-white focus:border-emerald-500/50 focus:bg-black focus:outline-none transition-all";
 
     return (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
-            <div className="relative w-full max-w-md max-h-[85vh] overflow-y-auto custom-scrollbar glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+            <div className={`relative w-full ${isNote ? 'max-w-md' : 'max-w-md'} max-h-[85vh] overflow-y-auto custom-scrollbar glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 transition-all duration-300`}>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-2xl font-bold text-white">Edit Item</h3>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
                 </div>
 
-                <div className="space-y-5">
-                    <div>
-                        <label className={labelStyle}>Title</label>
-                        <div className="relative group">
-                            {/* REMOVED: Type Icon to fix overlap */}
-                            <input
-                                type="text"
-                                value={formData.title || ''}
-                                onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                                className={inputStyle} // Removed pl-11
-                                autoComplete="off" // Prevent browser autofill ghosting
-                                name="vault_edit_title"
-                            />
-                        </div>
-                    </div>
-
-                    {isNote ? (
-                         <div>
-                            <label className={labelStyle}>Content</label>
-                            <textarea
-                                value={formData.content || ''}
-                                onChange={e => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                                className="w-full h-32 bg-zinc-950 border border-white/5 rounded-xl p-4 text-sm text-white focus:border-emerald-500/50 focus:bg-black focus:outline-none resize-none leading-relaxed"
-                                autoComplete="off"
-                                name="vault_edit_content"
-                            />
+                {isNote ? (
+                     <div className="text-center py-6">
+                         <div className="w-16 h-16 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner border border-white/5">
+                            <SquarePen className="w-8 h-8 text-emerald-300" />
                          </div>
-                    ) : (
+                         <h4 className="text-lg font-bold text-white mb-2">Edit Note in Studio</h4>
+                         <p className="text-zinc-400 text-xs mb-6 max-w-xs mx-auto">Open the full-screen editor to modify your note content, colors, and tags.</p>
+                         
+                         <button 
+                            onClick={handleEditInStudio}
+                            className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                         >
+                            <Maximize2 className="w-4 h-4" />
+                            Open Note Studio
+                         </button>
+                     </div>
+                ) : (
+                    <div className="space-y-5">
                         <div>
-                            <label className={labelStyle}>Link URL</label>
-                            {isDataUri(formData.url) ? (
-                                <div className="flex items-center justify-between w-full bg-zinc-900/50 border border-emerald-500/30 rounded-xl p-3">
-                                    <div className="flex items-center gap-2 overflow-hidden">
-                                        <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                                        <span className="text-sm text-emerald-200 truncate">Embedded File Data</span>
-                                    </div>
-                                    <button 
-                                        onClick={() => setFormData(prev => ({ ...prev, url: '' }))}
-                                        className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20"
-                                    >
-                                        Clear
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="relative group">
-                                    {/* REMOVED: Link Icon to fix overlap */}
-                                    <input
-                                        type="text"
-                                        value={formData.url || ''}
-                                        onChange={e => setFormData(prev => ({ ...prev, url: e.target.value }))}
-                                        className={inputStyle} // Removed pl-11
-                                        autoComplete="off"
-                                        name="vault_edit_url"
-                                    />
-                                </div>
-                            )}
+                            <label className={labelStyle}>Title</label>
+                            <div className="relative group">
+                                <input
+                                    type="text"
+                                    value={formData.title || ''}
+                                    onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                                    className={inputStyle}
+                                    autoComplete="off"
+                                    name="vault_edit_title"
+                                />
+                            </div>
                         </div>
-                    )}
 
-                    <div>
-                        <label className={labelStyle}>Tags (Comma Separated)</label>
-                        <div className="relative group">
-                            {/* REMOVED: Tag Icon to fix overlap */}
-                            <input
-                                type="text"
-                                value={tagInput}
-                                onChange={e => setTagInput(e.target.value)}
-                                className={inputStyle} // Removed pl-11
-                                autoComplete="off"
-                                name="vault_edit_tags"
-                            />
-                        </div>
-                    </div>
-
-                    {!isNote && (
-                         <div>
-                            <label className={labelStyle}>Appearance (Banner)</label>
-                            <div className="flex gap-3 mb-2">
-                                {isDataUri(formData.imageUrl) ? (
-                                     <div className="flex-1 flex items-center justify-between bg-zinc-900/50 border border-purple-500/30 rounded-xl p-3.5">
+                        {!isNote && (
+                            <div>
+                                <label className={labelStyle}>Link URL</label>
+                                {isDataUri(formData.url) ? (
+                                    <div className="flex items-center justify-between w-full bg-zinc-900/50 border border-emerald-500/30 rounded-xl p-3">
                                         <div className="flex items-center gap-2 overflow-hidden">
-                                            <ImageIcon className="w-4 h-4 text-purple-400 shrink-0" />
-                                            <span className="text-sm text-purple-200 truncate">Uploaded Image</span>
+                                            <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
+                                            <span className="text-sm text-emerald-200 truncate">Embedded File Data</span>
                                         </div>
                                         <button 
-                                            onClick={() => setFormData(prev => ({ ...prev, imageUrl: '' }))}
+                                            onClick={() => setFormData(prev => ({ ...prev, url: '' }))}
                                             className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20"
                                         >
-                                            Remove
+                                            Clear
                                         </button>
                                     </div>
                                 ) : (
-                                    <input
-                                        type="text"
-                                        value={formData.imageUrl || ''}
-                                        onChange={e => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
-                                        className={`${inputStyle} flex-1`}
-                                        autoComplete="off"
-                                        name="vault_edit_image_url"
-                                    />
-                                )}
-                                <label className="cursor-pointer bg-zinc-950/80 hover:bg-zinc-900 border border-white/5 hover:border-white/10 rounded-xl w-[50px] flex items-center justify-center transition-colors group">
-                                    <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                                    <Upload className="w-5 h-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
-                                </label>
-                            </div>
-                            {/* Image Preview */}
-                            {formData.imageUrl && (
-                                <div className="h-32 w-full rounded-xl overflow-hidden border border-white/10 relative mt-2 group">
-                                    <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                        <span className="text-xs font-bold text-white bg-black/50 px-2 py-1 rounded-full border border-white/10">Preview</span>
+                                    <div className="relative group">
+                                        <input
+                                            type="text"
+                                            value={formData.url || ''}
+                                            onChange={e => setFormData(prev => ({ ...prev, url: e.target.value }))}
+                                            className={inputStyle}
+                                            autoComplete="off"
+                                            name="vault_edit_url"
+                                        />
                                     </div>
-                                </div>
-                            )}
-                         </div>
-                    )}
+                                )}
+                            </div>
+                        )}
 
-                    <button 
-                        onClick={handleSave}
-                        className="w-full py-3.5 mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20 transition-all hover:scale-[1.02] active:scale-95"
-                    >
-                        Save Changes
-                    </button>
-                </div>
+                        <div>
+                            <label className={labelStyle}>Tags (Comma Separated)</label>
+                            <div className="relative group">
+                                <input
+                                    type="text"
+                                    value={tagInput}
+                                    onChange={e => setTagInput(e.target.value)}
+                                    className={inputStyle}
+                                    autoComplete="off"
+                                    name="vault_edit_tags"
+                                />
+                            </div>
+                        </div>
+
+                        {!isNote && (
+                            <div>
+                                <label className={labelStyle}>Appearance (Banner)</label>
+                                <div className="flex gap-3 mb-2">
+                                    {isDataUri(formData.imageUrl) ? (
+                                        <div className="flex-1 flex items-center justify-between bg-zinc-900/50 border border-purple-500/30 rounded-xl p-3.5">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <ImageIcon className="w-4 h-4 text-purple-400 shrink-0" />
+                                                <span className="text-sm text-purple-200 truncate">Uploaded Image</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => setFormData(prev => ({ ...prev, imageUrl: '' }))}
+                                                className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20"
+                                            >
+                                                Remove
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <input
+                                            type="text"
+                                            value={formData.imageUrl || ''}
+                                            onChange={e => setFormData(prev => ({ ...prev, imageUrl: e.target.value }))}
+                                            className={`${inputStyle} flex-1`}
+                                            autoComplete="off"
+                                            name="vault_edit_image_url"
+                                        />
+                                    )}
+                                    <label className="cursor-pointer bg-zinc-950/80 hover:bg-zinc-900 border border-white/5 hover:border-white/10 rounded-xl w-[50px] flex items-center justify-center transition-colors group">
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                                        <Upload className="w-5 h-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                                    </label>
+                                </div>
+                                {/* Image Preview */}
+                                {formData.imageUrl && (
+                                    <div className="h-32 w-full rounded-xl overflow-hidden border border-white/10 relative mt-2 group">
+                                        <img src={formData.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <span className="text-xs font-bold text-white bg-black/50 px-2 py-1 rounded-full border border-white/10">Preview</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <button 
+                            onClick={() => handleSave()}
+                            className="w-full py-3.5 mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/20 transition-all hover:scale-[1.02] active:scale-95"
+                        >
+                            Save Changes
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -884,7 +1104,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   onUpdateFolders, 
   theme, 
   isSharedMode = false,
-  openFolderId,
+  openFolderId, 
   onOpenFolder
 }) => {
   const [authFolderId, setAuthFolderId] = useState<string | null>(null);
@@ -923,6 +1143,13 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
   // Multi-select State
   const [selectedVaultItemIds, setSelectedVaultItemIds] = useState<string[]>([]);
   const [isBulkDeleteVault, setIsBulkDeleteVault] = useState(false);
+
+  // Note Studio State
+  const [notePage, setNotePage] = useState<{ isOpen: boolean; data: BlockData | null; mode: 'create' | 'edit' }>({ 
+      isOpen: false, 
+      data: null, 
+      mode: 'create' 
+  });
 
   // Folder Deletion State
   const [folderToDelete, setFolderToDelete] = useState<string | null>(null);
@@ -1118,6 +1345,33 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
     const currentItems = activeFolder.items || [];
     const blockWithTime = { ...updatedBlock, lastUpdated: Date.now() };
     updateFolderItems(activeFolder.id, currentItems.map(b => (b && b.id === updatedBlock.id) ? blockWithTime : b));
+  };
+
+  // Handle saving from the Full Note Studio
+  const handleSaveNote = (data: Partial<BlockData>) => {
+      if (notePage.mode === 'create') {
+          // Add new note
+          const newBlock: BlockData = {
+            id: Date.now().toString(),
+            type: 'text',
+            size: '2x1',
+            title: data.title || 'Untitled Note',
+            content: data.content || '',
+            status: data.status,
+            tags: data.tags,
+            lastUpdated: Date.now()
+          };
+          handleAddBlockData(newBlock);
+      } else if (notePage.mode === 'edit' && notePage.data) {
+          // Update existing note
+          const updatedBlock = {
+              ...notePage.data,
+              ...data,
+              lastUpdated: Date.now()
+          };
+          handleUpdateBlock(updatedBlock as BlockData);
+      }
+      setNotePage({ isOpen: false, data: null, mode: 'create' });
   };
 
   const handleResizeBlock = (id: string) => {
@@ -1523,14 +1777,15 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
              isOpen={isAddingItem} 
              onClose={() => setIsAddingItem(false)}
              onAdd={handleAddBlockData}
+             onOpenNoteStudio={() => setNotePage({ isOpen: true, data: null, mode: 'create' })}
            />
            
-           {/* Replaced generic BlockEditorModal with Vault-specific one */}
            <VaultEditItemModal 
               isOpen={!!editingBlock}
               block={editingBlock}
               onClose={() => setEditingBlock(null)}
               onSave={handleUpdateBlock}
+              onOpenNoteStudio={(block) => setNotePage({ isOpen: true, data: block, mode: 'edit' })}
            />
            
            <DeleteConfirmModal 
@@ -1545,6 +1800,14 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
               isOpen={!!previewDocument}
               block={previewDocument}
               onClose={() => setPreviewDocument(null)}
+           />
+
+           {/* Full Screen Note Studio */}
+           <VaultNotePage 
+              isOpen={notePage.isOpen}
+              initialData={notePage.data}
+              onSave={handleSaveNote}
+              onClose={() => setNotePage({ isOpen: false, data: null, mode: 'create' })}
            />
         </div>
       )}

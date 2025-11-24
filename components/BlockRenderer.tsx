@@ -386,8 +386,22 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
 
   const renderText = () => {
     const hasBanner = !!block.imageUrl;
+    // Map status to background color for Notes
+    const colorMap: Record<string, string> = {
+        'red': 'bg-gradient-to-br from-red-900/40 via-red-950/20 to-black/40 border-red-500/20',
+        'orange': 'bg-gradient-to-br from-orange-900/40 via-orange-950/20 to-black/40 border-orange-500/20',
+        'yellow': 'bg-gradient-to-br from-yellow-900/40 via-yellow-950/20 to-black/40 border-yellow-500/20',
+        'green': 'bg-gradient-to-br from-emerald-900/40 via-emerald-950/20 to-black/40 border-emerald-500/20',
+        'teal': 'bg-gradient-to-br from-teal-900/40 via-teal-950/20 to-black/40 border-teal-500/20',
+        'blue': 'bg-gradient-to-br from-blue-900/40 via-blue-950/20 to-black/40 border-blue-500/20',
+        'purple': 'bg-gradient-to-br from-purple-900/40 via-purple-950/20 to-black/40 border-purple-500/20',
+        'pink': 'bg-gradient-to-br from-pink-900/40 via-pink-950/20 to-black/40 border-pink-500/20',
+    };
+
+    const bgColor = block.status && colorMap[block.status] ? colorMap[block.status] : '';
+
     return (
-      <div className="flex flex-col justify-between h-full p-6 relative group overflow-hidden">
+      <div className={`flex flex-col justify-between h-full p-6 relative group overflow-hidden ${bgColor ? `${bgColor} border` : ''}`}>
          {/* Banner Background */}
          {hasBanner && (
           <>
@@ -402,13 +416,16 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
           </>
         )}
 
-         {!hasBanner && (
+         {!hasBanner && !bgColor && (
             <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-zinc-100/5 blur-3xl rounded-full group-hover:bg-zinc-100/10 transition-colors duration-500" />
          )}
 
          <div className="relative z-10 w-full h-full flex flex-col">
           <h3 className="text-xl font-bold text-zinc-100 mb-2 drop-shadow-md">{block.title}</h3>
-          <p className="text-zinc-300 text-sm leading-relaxed drop-shadow-md font-medium line-clamp-4 flex-grow">{block.content}</p>
+          <div 
+            className="text-zinc-300 text-sm leading-relaxed drop-shadow-md font-medium line-clamp-4 flex-grow prose prose-invert max-w-none prose-p:my-1 prose-headings:my-1"
+            dangerouslySetInnerHTML={{ __html: block.content || '' }}
+          />
          </div>
          {block.url && (
            <div className="relative z-10 flex items-center gap-2 mt-4 text-xs font-semibold text-zinc-400 group-hover:text-zinc-200 transition-colors">
@@ -421,6 +438,17 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
             <div className="absolute top-4 right-4 text-[10px] text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 bg-black/20 backdrop-blur-sm px-2 py-0.5 rounded-full border border-white/5 select-none cursor-default">
                Updated {formatLastUpdated(block.lastUpdated)}
             </div>
+         )}
+         
+         {/* Tags Display (for Notes) */}
+         {block.tags && block.tags.length > 0 && !hasBanner && (
+           <div className="relative z-10 flex flex-wrap gap-1 mt-3">
+             {block.tags.map((tag, i) => (
+               <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/5">
+                 #{tag}
+               </span>
+             ))}
+           </div>
          )}
       </div>
     );
