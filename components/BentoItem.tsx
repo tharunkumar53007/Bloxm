@@ -17,6 +17,8 @@ interface BentoItemProps {
   onUpdate?: (id: string, updates: Partial<BlockData>) => void;
   onToggleSelect?: (id: string, isModifier: boolean) => void;
   onItemClick?: (block: BlockData) => void;
+  // Optional index to tag specific items for tutorial
+  index?: number;
 }
 
 const getSizeClasses = (size: string): string => {
@@ -42,7 +44,8 @@ export const BentoItem: React.FC<BentoItemProps> = ({
   onMove,
   onUpdate,
   onToggleSelect,
-  onItemClick
+  onItemClick,
+  index
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -182,6 +185,7 @@ export const BentoItem: React.FC<BentoItemProps> = ({
       onClick={handleItemClick}
       // @ts-ignore
       ref={itemRef}
+      id={index === 0 ? "tutorial-first-block" : undefined}
       draggable={isEditing && !isResizing && !isSelected} 
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}

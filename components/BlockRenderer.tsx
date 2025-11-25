@@ -535,11 +535,48 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
     </div>
   );
 
+  const renderList = () => {
+    const isOrdered = block.listType === 'ordered';
+    const items = block.items || [];
+    
+    return (
+      <div className="flex flex-col h-full w-full p-6 relative group overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+        
+        {/* Title */}
+        <h3 className="text-xl font-bold text-zinc-100 mb-4 drop-shadow-md sticky top-0 bg-inherit z-10">{block.title || 'List'}</h3>
+        
+        {/* List Content */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 relative z-0">
+            {items.length === 0 ? (
+                <p className="text-zinc-600 text-xs italic">Empty list</p>
+            ) : isOrdered ? (
+                <ol className="list-decimal list-inside space-y-2 text-zinc-300 text-sm font-medium marker:text-yellow-500/80">
+                    {items.map((item, i) => <li key={i} className="pl-1 break-words">{item}</li>)}
+                </ol>
+            ) : (
+                <ul className="list-disc list-inside space-y-2 text-zinc-300 text-sm font-medium marker:text-yellow-500/80">
+                     {items.map((item, i) => <li key={i} className="pl-1 break-words">{item}</li>)}
+                </ul>
+            )}
+        </div>
+        
+        {/* Last Updated Timestamp */}
+        {block.lastUpdated && (
+           <div className="absolute top-6 right-6 text-[10px] text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 bg-black/20 backdrop-blur-sm px-2 py-0.5 rounded-full border border-white/5 select-none cursor-default">
+               Updated {formatLastUpdated(block.lastUpdated)}
+           </div>
+        )}
+      </div>
+    );
+  };
+
   switch (block.type) {
     case 'profile': return renderProfile();
     case 'social': return renderSocial();
     case 'image': return renderImage();
     case 'map': return renderMap();
+    case 'list': return renderList();
     case 'text': return renderText();
     default: return renderText();
   }

@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowRight, Lock, Mail, AlertCircle, Loader2, User, KeyRound, CheckCircle2, UserCircle2 } from 'lucide-react';
+import { ArrowRight, Lock, Mail, AlertCircle, Loader2, User, KeyRound, UserCircle2, ArrowLeft } from 'lucide-react';
 import { Logo } from './Logo';
 import { signInWithGoogle, logInWithEmailAndPassword, registerWithEmailAndPassword, loginAsGuest } from '../services/firebase';
 
 interface AuthScreenProps {
   onLogin?: (email: string) => void; 
   onBypassLogin?: () => void;
+  onBack?: () => void;
 }
 
 // Simple Google Icon SVG
@@ -19,7 +20,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin, onBack }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   
   // Form State
@@ -76,18 +77,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin }) => {
       
       if (typeof err === 'string') {
           msg = err;
+      } else if (err instanceof Error) {
+          msg = err.message;
       } else if (err && typeof err === 'object') {
-          // Firebase Error Codes
-          if (err.code === 'auth/email-already-in-use') {
+          // Firebase Error Codes Check
+          const code = (err as any).code;
+          if (code === 'auth/email-already-in-use') {
             msg = "This email is already registered.";
-          } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+          } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
             msg = "Invalid email or password.";
-          } else if (err.code === 'auth/weak-password') {
+          } else if (code === 'auth/weak-password') {
             msg = "Password should be at least 6 characters.";
-          } else if (err.code === 'auth/unauthorized-domain') {
-            msg = "Domain not authorized. Please check your console settings.";
-          } else if (err.message) {
-            msg = err.message;
+          } else if (code === 'auth/unauthorized-domain') {
+            msg = "Domain not authorized. Check Firebase Console.";
+          } else if ('message' in err) {
+             msg = String(err.message);
+          } else {
+             // Safe Fallback for unknown objects
+             try {
+                // Prevent [object Object] by attempting safe stringify, or ignore
+                const s = JSON.stringify(err);
+                if (s && s !== '{}') msg = "Error: " + s.slice(0, 50);
+             } catch(e) {
+                // If stringify fails, keep default msg
+             }
           }
       }
       
@@ -111,8 +124,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin }) => {
             setTimeout(() => {
                 setLoading(false);
                 setShowOtpStep(true);
-                // Clear password fields for security in UI transition
-                // but keep them in state for actual registration
             }, 1000);
             return;
         }
@@ -159,7 +170,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin }) => {
           // Attempt Firebase Anonymous Auth first
           await loginAsGuest();
       } catch (err: any) {
-          // If Firebase fails (e.g. auth/admin-restricted-operation),
+          // If Firebase fails (e.g. auth/admin-restricted-operation or unauthorized domain),
           // Fallback to local guest mode so the user can still use the app.
           console.warn("Firebase Anonymous Auth failed, using offline fallback.", err);
           
@@ -215,7 +226,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin }) => {
 
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
 
-      <div className="w-full max-w-md z-10 animate-in zoom-in-95 duration-500">
+      <div className="w-full max-w-md z-10 animate-in zoom-in-95 duration-500 relative">
+        
+        {onBack && (
+            <button 
+                onClick={onBack}
+                className="absolute -top-12 left-0 text-zinc-400 hover:text-white flex items-center gap-2 text-sm font-medium transition-colors"
+            >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Home
+            </button>
+        )}
+
         <div className="mb-10 text-center flex flex-col items-center">
           <div className="w-24 h-24 mb-6 filter drop-shadow-[0_0_25px_rgba(52,211,153,0.4)] animate-heartbeat">
              <Logo />
@@ -234,7 +256,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin }) => {
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-200 text-xs p-4 rounded-2xl mb-6 flex items-start gap-3 animate-in slide-in-from-top-2 select-text shadow-inner">
               <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
-              <span className="font-bold text-sm leading-relaxed">{typeof error === 'string' ? error : "An unexpected error occurred."}</span>
+              <span className="font-bold text-sm leading-relaxed">{error}</span>
             </div>
           )}
 

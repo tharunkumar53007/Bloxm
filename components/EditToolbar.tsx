@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LayoutGrid, Check, Share2, Sparkles, Palette, Type, Image as ImageIcon, Map, RefreshCw, Trash2, Copy, X } from 'lucide-react';
+import { LayoutGrid, Check, Share2, Sparkles, Palette, Type, Image as ImageIcon, Map, RefreshCw, Trash2, Copy, X, List } from 'lucide-react';
 import { BlockType } from '../types';
 
 interface EditToolbarProps {
@@ -81,7 +81,7 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
   }
 
   return (
-    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-max max-w-[90vw] transition-all duration-500">
+    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-max max-w-[90vw] transition-all duration-500" id="toolbar-container">
       <div className="flex items-center gap-3 p-3 rounded-full glass-panel shadow-[0_20px_40px_-10px_rgba(0,0,0,0.6)] overflow-x-auto no-scrollbar border border-white/10 backdrop-blur-2xl">
         
         {!isEditing ? (
@@ -96,6 +96,7 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
               </button>
             ) : (
               <button 
+                id="tutorial-edit-btn"
                 onClick={toggleEdit}
                 className="flex items-center gap-2 px-6 py-3 rounded-full liquid-btn text-zinc-100 font-medium whitespace-nowrap hover:text-white"
               >
@@ -105,6 +106,7 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
             )}
             
             <button 
+              id="tutorial-share-btn"
               onClick={handleShareClick}
               className={`flex items-center gap-2 px-5 py-3 rounded-full liquid-btn transition-all ${justCopied ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 scale-105' : 'text-zinc-300 hover:text-white'}`}
               title="Share Layout"
@@ -117,6 +119,7 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
           <>
              {/* AI Magic Button */}
              <button 
+                id="tutorial-ai-btn"
                 onClick={onOpenAI}
                 className="flex items-center gap-2 px-5 py-3 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium hover:shadow-lg hover:shadow-emerald-500/30 transition-all mr-2 whitespace-nowrap border border-white/10 hover:scale-105 active:scale-95"
               >
@@ -126,6 +129,7 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
 
              {/* Theme Button */}
              <button 
+                id="tutorial-theme-btn"
                 onClick={onOpenTheme}
                 className="p-3 rounded-full liquid-btn text-zinc-300 hover:text-emerald-400 mr-3 group"
                 title="Change Theme"
@@ -133,7 +137,7 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
                 <Palette className="w-5 h-5 group-hover:rotate-12 transition-transform duration-500" />
               </button>
 
-            <div className="flex items-center gap-2 pr-4 border-r border-white/10 mr-2">
+            <div className="flex items-center gap-2 pr-4 border-r border-white/10 mr-2" id="tutorial-add-blocks">
               <button 
                 onClick={() => addBlock('social')}
                 className="p-3 rounded-full liquid-btn text-zinc-400 hover:text-blue-400 hover:bg-blue-400/10 hover:scale-110"
@@ -147,6 +151,13 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
                 title="Add Text"
               >
                 <Type className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => addBlock('list')}
+                className="p-3 rounded-full liquid-btn text-zinc-400 hover:text-yellow-400 hover:bg-yellow-400/10 hover:scale-110"
+                title="Add List"
+              >
+                <List className="w-5 h-5" />
               </button>
               <button 
                 onClick={() => addBlock('image')}
