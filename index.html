@@ -118,6 +118,12 @@
         100% { transform: scale(1); }
       }
       
+      /* Infinite Scroll Animation */
+      @keyframes marquee {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+      }
+      
       /* Classes to force GPU usage */
       .animate-float {
         animation: float 20s infinite ease-in-out;
@@ -129,6 +135,13 @@
       }
       .animate-heartbeat {
         animation: heartbeat 5s infinite ease-in-out; /* Slowed down for calmness */
+      }
+      .animate-marquee {
+        animation: marquee 40s linear infinite;
+        width: max-content;
+      }
+      .animate-marquee:hover {
+        animation-play-state: paused;
       }
       
       /* Utilities */
@@ -152,6 +165,7 @@
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
     "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
     "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
   }
 }

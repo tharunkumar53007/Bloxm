@@ -1,4 +1,5 @@
 
+
 export type BlockType = 'social' | 'image' | 'text' | 'map' | 'profile' | 'list';
 export type BlockSize = string; // Format: "${width}x${height}" e.g., "1x1", "2x2", "3x1"
 
@@ -33,6 +34,7 @@ export interface UserConfig {
   username: string;
   email: string;
   avatar?: string;
+  uid?: string;
 }
 
 export interface ThemeConfig {

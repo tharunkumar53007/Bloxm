@@ -1,4 +1,5 @@
 
+
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -12,6 +13,7 @@ import {
   onAuthStateChanged,
   User
 } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBS0KfPFNs4OUWxIUBvBu0aBgRq28MaGG0",
@@ -25,6 +27,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
 export const signInWithGoogle = async () => {
@@ -69,5 +72,26 @@ export const loginAsGuest = async () => {
 
 export const logout = () => signOut(auth);
 
-export { auth, onAuthStateChanged };
+export const saveUserData = async (uid: string, data: any) => {
+    try {
+        await setDoc(doc(db, 'users', uid), data, { merge: true });
+    } catch (e) {
+        console.error("Error saving user data to Firestore", e);
+    }
+}
+
+export const loadUserData = async (uid: string) => {
+    try {
+        const docRef = doc(db, 'users', uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return docSnap.data();
+        }
+    } catch (e) {
+        console.error("Error loading user data from Firestore", e);
+    }
+    return null;
+}
+
+export { auth, onAuthStateChanged, db };
 export type { User };

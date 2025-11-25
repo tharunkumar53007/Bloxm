@@ -75,33 +75,57 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin, onBack })
   const handleAuthError = (err: any) => {
       let msg = "An unexpected error occurred.";
       
+      // Safety check for null/undefined
+      if (!err) {
+          setError(msg);
+          return;
+      }
+
+      // 1. Attempt to extract string message
       if (typeof err === 'string') {
           msg = err;
-      } else if (err instanceof Error) {
-          msg = err.message;
-      } else if (err && typeof err === 'object') {
-          // Firebase Error Codes Check
-          const code = (err as any).code;
-          if (code === 'auth/email-already-in-use') {
-            msg = "This email is already registered.";
-          } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
-            msg = "Invalid email or password.";
-          } else if (code === 'auth/weak-password') {
-            msg = "Password should be at least 6 characters.";
-          } else if (code === 'auth/unauthorized-domain') {
-            msg = "Domain not authorized. Check Firebase Console.";
-          } else if ('message' in err) {
-             msg = String(err.message);
-          } else {
-             // Safe Fallback for unknown objects
-             try {
-                // Prevent [object Object] by attempting safe stringify, or ignore
-                const s = JSON.stringify(err);
-                if (s && s !== '{}') msg = "Error: " + s.slice(0, 50);
-             } catch(e) {
-                // If stringify fails, keep default msg
-             }
+      } else if (err.code && typeof err.code === 'string') {
+          // Firebase specific codes
+          switch (err.code) {
+              case 'auth/email-already-in-use': msg = "Email already registered."; break;
+              case 'auth/invalid-credential': msg = "Invalid email or password."; break;
+              case 'auth/wrong-password': msg = "Invalid password."; break;
+              case 'auth/user-not-found': msg = "User not found."; break;
+              case 'auth/weak-password': msg = "Password must be 6+ chars."; break;
+              case 'auth/unauthorized-domain': msg = "Domain not authorized in Firebase Console."; break;
+              case 'auth/popup-closed-by-user': msg = "Sign-in cancelled."; break;
+              case 'auth/network-request-failed': msg = "Network error. Check connection."; break;
+              case 'auth/too-many-requests': msg = "Too many attempts. Please wait."; break;
+              case 'auth/operation-not-allowed': msg = "Login method not enabled."; break;
+              case 'auth/admin-restricted-operation': msg = "Guest login restricted. Try Google."; break;
+              default: msg = `Error (${err.code})`;
           }
+      } else if (err.message) {
+          // Handle Error object or similar structure
+          if (typeof err.message === 'string') {
+              msg = err.message;
+          } else {
+              msg = "Error occurred.";
+          }
+      } else {
+          // Fallback for other objects
+          try {
+              const s = JSON.stringify(err);
+              if (s !== '{}') msg = "Error: " + s.slice(0, 100);
+          } catch { /* ignore */ }
+      }
+
+      // 2. Final clean up of unwanted patterns (e.g. [object Object])
+      if (typeof msg !== 'string') {
+         msg = "An error occurred.";
+      }
+      
+      if (msg.includes('[object Object]')) {
+          msg = msg.replace(/\[object Object\]/g, "Unknown Error");
+      }
+
+      if (msg.trim() === '') {
+          msg = "An unexpected error occurred.";
       }
       
       setError(msg);
@@ -156,8 +180,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin, onBack })
     try {
       await signInWithGoogle();
     } catch (err: any) {
+       // Only ignore specific "cancelled" errors, but handle others
        if (err.code !== 'auth/popup-closed-by-user') {
-          console.warn("Auth Error:", err);
           handleAuthError(err);
        }
     }
@@ -177,7 +201,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onBypassLogin, onBack })
           if (onBypassLogin) {
               onBypassLogin();
           } else {
-              setError("Guest login unavailable. Please try Google or Email.");
+              handleAuthError(err); // Show the specific error if fallback isn't available
           }
       } finally {
           setLoading(false);
