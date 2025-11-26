@@ -1,5 +1,4 @@
 
-
 export type BlockType = 'social' | 'image' | 'text' | 'map' | 'profile' | 'list';
 export type BlockSize = string; // Format: "${width}x${height}" e.g., "1x1", "2x2", "3x1"
 
@@ -25,9 +24,15 @@ export interface VaultFolder {
   id: string;
   name: string;
   type: 'public' | 'private';
-  password?: string;
   items: BlockData[];
   description?: string;
+
+  // Security & Encryption
+  password?: string; // Legacy/Migration only. Should be cleared after migration to encryption.
+  isEncrypted?: boolean; 
+  encryptedData?: string; // Base64 Encrypted BlockData[]
+  encryptionSalt?: string;
+  encryptionIV?: string;
 }
 
 export interface UserConfig {

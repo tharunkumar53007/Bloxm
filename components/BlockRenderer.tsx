@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { BlockData } from '../types';
+import DOMPurify from 'dompurify';
 import { 
   Github, 
   Twitter, 
@@ -428,7 +429,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
                     <h3 className="text-lg font-bold text-white mb-2 line-clamp-1 drop-shadow-md">{block.title}</h3>
                     <div 
                         className="text-zinc-400 text-xs leading-relaxed line-clamp-3 prose prose-invert prose-p:my-0 break-words"
-                        dangerouslySetInnerHTML={{ __html: block.content || '' }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(block.content || '') }}
                     />
                     
                     {/* Footer Info */}
@@ -454,7 +455,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({ block }) => {
           <h3 className="text-xl font-bold text-zinc-100 mb-2 drop-shadow-md">{block.title}</h3>
           <div 
             className="text-zinc-300 text-sm leading-relaxed drop-shadow-md font-medium line-clamp-4 flex-grow prose prose-invert max-w-none prose-p:my-1 prose-headings:my-1"
-            dangerouslySetInnerHTML={{ __html: block.content || '' }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(block.content || '') }}
           />
          </div>
          {block.url && (
