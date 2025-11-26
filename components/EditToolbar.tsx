@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LayoutGrid, Check, Share2, Sparkles, Palette, Type, Image as ImageIcon, Map, RefreshCw, Trash2, Copy, X, List } from 'lucide-react';
+import { LayoutGrid, Check, Share2, Sparkles, Palette, Type, Image as ImageIcon, Map, RefreshCw, Trash2, Copy, X, List, User } from 'lucide-react';
 import { BlockType } from '../types';
 
 interface EditToolbarProps {
@@ -136,6 +136,13 @@ export const EditToolbar: React.FC<EditToolbarProps> = ({
               </button>
 
             <div className="flex items-center gap-1.5 md:gap-2 pr-2 md:pr-4 border-r border-white/10 mr-1 md:mr-2 shrink-0">
+              <button 
+                onClick={() => addBlock('profile')}
+                className="p-2.5 md:p-3 rounded-full liquid-btn text-zinc-400 hover:text-indigo-400 hover:bg-indigo-400/10 hover:scale-110"
+                title="Add Profile Block"
+              >
+                <User className="w-4 h-4 md:w-5 md:h-5" />
+              </button>
               <button 
                 onClick={() => addBlock('social')}
                 className="p-2.5 md:p-3 rounded-full liquid-btn text-zinc-400 hover:text-blue-400 hover:bg-blue-400/10 hover:scale-110"

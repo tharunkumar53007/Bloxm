@@ -477,13 +477,14 @@ const App: React.FC = () => {
     const newBlock: BlockData = {
       id: Date.now().toString(),
       type,
-      size: type === 'list' ? '1x2' : '1x1',
-      title: type === 'list' ? 'My List' : type.charAt(0).toUpperCase() + type.slice(1),
-      content: type === 'text' ? 'Edit this content...' : undefined,
+      size: type === 'profile' ? '2x2' : (type === 'list' ? '1x2' : '1x1'),
+      title: type === 'list' ? 'My List' : (type === 'profile' ? 'Welcome' : type.charAt(0).toUpperCase() + type.slice(1)),
+      content: type === 'text' ? 'Edit this content...' : (type === 'profile' ? 'I am a creative developer based in Internet. This is my personal slice of the web.' : undefined),
       imageUrl: type === 'image' || type === 'profile' ? `https://picsum.photos/seed/${Date.now()}/400/400` : undefined,
       iconName: type === 'social' ? 'globe' : undefined,
       listType: type === 'list' ? 'unordered' : undefined,
       items: type === 'list' ? ['Item 1', 'Item 2', 'Item 3'] : undefined,
+      status: type === 'profile' ? 'Available for work' : undefined,
       lastUpdated: Date.now()
     };
     setBlocks(prev => [...prev, newBlock]);
