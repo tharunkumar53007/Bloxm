@@ -196,7 +196,7 @@ const VaultNotePage: React.FC<VaultNotePageProps> = ({ isOpen, initialData, onSa
             <div className="relative z-10 flex-1 flex flex-col max-w-5xl mx-auto w-full h-full md:p-8">
                 
                 {/* Header Actions */}
-                <div className="flex items-center justify-between p-4 md:p-0 mb-6">
+                <div className="flex items-center justify-between p-4 md:p-0 mb-2 md:mb-6">
                     <button 
                         onClick={onClose}
                         className="p-3 rounded-full hover:bg-white/10 text-zinc-300 hover:text-white transition-all group backdrop-blur-md border border-white/5 bg-black/20"
@@ -206,7 +206,7 @@ const VaultNotePage: React.FC<VaultNotePageProps> = ({ isOpen, initialData, onSa
 
                     <button 
                         onClick={handleSave}
-                        className="flex items-center gap-2 px-8 py-3 rounded-full bg-white text-black font-bold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-95 transform-gpu"
+                        className="flex items-center gap-2 px-6 py-2.5 md:px-8 md:py-3 rounded-full bg-white text-black font-bold hover:bg-zinc-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-95 transform-gpu"
                     >
                         <Save className="w-4 h-4" />
                         <span>Save Note</span>
@@ -222,11 +222,11 @@ const VaultNotePage: React.FC<VaultNotePageProps> = ({ isOpen, initialData, onSa
                         placeholder="Untitled Note..."
                         value={title}
                         onChange={e => setTitle(e.target.value)}
-                        className="w-full bg-transparent border-none text-4xl md:text-5xl font-bold text-white placeholder:text-white/20 focus:outline-none p-6 md:px-10 md:pt-10 md:pb-6 drop-shadow-sm"
+                        className="w-full bg-transparent border-none text-3xl md:text-5xl font-bold text-white placeholder:text-white/20 focus:outline-none p-6 md:px-10 md:pt-10 md:pb-6 drop-shadow-sm"
                         autoFocus
                      />
 
-                     {/* Premium Toolbar */}
+                     {/* Premium Toolbar - Wrapped for Mobile */}
                      <div className="px-6 md:px-10 flex flex-wrap items-center gap-2 border-b border-white/5 pb-4 mb-2">
                         {/* History */}
                         <div className="flex items-center bg-black/20 rounded-lg p-1 mr-2 border border-white/5">
@@ -265,13 +265,13 @@ const VaultNotePage: React.FC<VaultNotePageProps> = ({ isOpen, initialData, onSa
                         </div>
 
                         {/* Text Colors */}
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-black/20 rounded-lg border border-white/5 ml-auto md:ml-0 overflow-x-auto no-scrollbar max-w-[150px] md:max-w-none">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-black/20 rounded-lg border border-white/5 ml-auto md:ml-0 overflow-x-auto no-scrollbar max-w-[150px] md:max-w-none shrink-0">
                             <span className="text-[10px] font-bold text-zinc-500 uppercase mr-1">Color</span>
                             {TEXT_COLORS.map(c => (
                                 <button
                                     key={c.name}
                                     onMouseDown={(e) => { e.preventDefault(); execCmd('foreColor', c.value); }}
-                                    className={`w-4 h-4 rounded-full ${c.class} hover:scale-125 transition-transform border border-white/10 shadow-sm`}
+                                    className={`w-4 h-4 rounded-full ${c.class} hover:scale-125 transition-transform border border-white/10 shadow-sm shrink-0`}
                                     title={c.name}
                                 />
                             ))}
@@ -282,14 +282,14 @@ const VaultNotePage: React.FC<VaultNotePageProps> = ({ isOpen, initialData, onSa
                      <div
                         ref={editorRef}
                         contentEditable
-                        className="flex-1 w-full bg-transparent border-none text-lg text-zinc-100 placeholder:text-zinc-500 focus:outline-none px-6 md:px-10 py-4 overflow-y-auto outline-none custom-scrollbar selection:bg-emerald-500/30 selection:text-white prose prose-invert max-w-none prose-p:my-2 prose-ul:list-disc prose-ul:pl-4 prose-ol:list-decimal prose-ol:pl-4 prose-headings:font-bold prose-headings:text-white"
+                        className="flex-1 w-full bg-transparent border-none text-base md:text-lg text-zinc-100 placeholder:text-zinc-500 focus:outline-none px-6 md:px-10 py-4 overflow-y-auto outline-none custom-scrollbar selection:bg-emerald-500/30 selection:text-white prose prose-invert max-w-none prose-p:my-2 prose-ul:list-disc prose-ul:pl-4 prose-ol:list-decimal prose-ol:pl-4 prose-headings:font-bold prose-headings:text-white"
                         onInput={updateWordCount}
                         spellCheck={false}
                      />
 
                      {/* Footer Metadata */}
-                     <div className="p-6 md:px-10 md:py-6 bg-black/20 border-t border-white/5 flex flex-col md:flex-row gap-4 items-center justify-between backdrop-blur-md">
-                         <div className="flex items-center gap-4 text-xs font-mono text-zinc-400">
+                     <div className="p-4 md:px-10 md:py-6 bg-black/20 border-t border-white/5 flex flex-col md:flex-row gap-4 items-center justify-between backdrop-blur-md">
+                         <div className="flex items-center gap-4 text-xs font-mono text-zinc-400 w-full md:w-auto">
                              <span className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/5">
                                 <AlignLeft className="w-3 h-3" />
                                 {wordCount} Words
@@ -508,17 +508,17 @@ const DocumentPreviewModal: React.FC<{
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-6 border-t border-white/5 bg-black/20 flex justify-center gap-4 z-20 backdrop-blur-md">
+                <div className="p-6 border-t border-white/5 bg-black/20 flex justify-center gap-4 z-20 backdrop-blur-md flex-wrap">
                      <button 
                         onClick={handleDownload}
-                        className="flex items-center gap-2 px-8 py-3.5 rounded-2xl liquid-btn text-white font-bold hover:text-white border border-white/10 hover:border-white/30 shadow-lg hover:shadow-white/10 transition-all hover:scale-105 active:scale-95 group"
+                        className="flex items-center gap-2 px-6 md:px-8 py-3.5 rounded-2xl liquid-btn text-white font-bold hover:text-white border border-white/10 hover:border-white/30 shadow-lg hover:shadow-white/10 transition-all hover:scale-105 active:scale-95 group flex-1 md:flex-none justify-center"
                      >
                         <Download className="w-4 h-4 group-hover:animate-bounce" />
-                        Download {ext !== 'FILE' ? ext : 'File'}
+                        Download
                      </button>
                      <button 
                         onClick={handleShare}
-                        className="flex items-center gap-2 px-8 py-3.5 rounded-2xl liquid-btn text-zinc-300 font-bold hover:text-white border border-white/5 hover:border-white/20 transition-all hover:scale-105 active:scale-95"
+                        className="flex items-center gap-2 px-6 md:px-8 py-3.5 rounded-2xl liquid-btn text-zinc-300 font-bold hover:text-white border border-white/5 hover:border-white/20 transition-all hover:scale-105 active:scale-95 flex-1 md:flex-none justify-center"
                      >
                         <Share2 className="w-4 h-4" />
                         Share
@@ -780,7 +780,7 @@ const VaultAddItemModal: React.FC<VaultAddItemModalProps> = ({ isOpen, onClose, 
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
       
-      <div className={`relative w-full ${type === 'note' ? 'max-w-2xl' : 'max-w-lg'} glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 transition-all duration-300`}>
+      <div className={`relative w-full ${type === 'note' ? 'max-w-2xl' : 'max-w-lg'} glass-panel rounded-[2.5rem] p-6 md:p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 transition-all duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar`}>
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-2xl font-bold text-white">Add to Vault</h3>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
@@ -958,7 +958,7 @@ const VaultEditItemModal: React.FC<VaultEditItemModalProps> = ({ isOpen, block, 
     return (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={onClose} />
-            <div className={`relative w-full ${isNote ? 'max-w-md' : 'max-w-md'} max-h-[85vh] overflow-y-auto custom-scrollbar glass-panel rounded-[2rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 transition-all duration-300`}>
+            <div className={`relative w-full ${isNote ? 'max-w-md' : 'max-w-md'} max-h-[85vh] overflow-y-auto custom-scrollbar glass-panel rounded-[2rem] p-6 md:p-8 border border-white/10 shadow-2xl animate-in zoom-in-95 transition-all duration-300`}>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-2xl font-bold text-white">Edit Item</h3>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white"><X className="w-5 h-5"/></button>
@@ -1508,8 +1508,8 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
       {/* Vault Header */}
       <div className="flex items-center justify-between mb-8 px-2">
-        <h2 className="text-4xl font-bold text-white flex items-center gap-3 text-glow">
-          <Shield className="w-8 h-8 text-emerald-400" />
+        <h2 className="text-3xl md:text-4xl font-bold text-white flex items-center gap-3 text-glow">
+          <Shield className="w-6 h-6 md:w-8 md:h-8 text-emerald-400" />
           Vault
         </h2>
         {isEditing && !isSharedMode && (
@@ -1541,7 +1541,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
             onDrop={(e) => handleFolderDrop(e, folder.id)}
             onClick={() => handleFolderClick(folder)}
             className={`
-              group relative aspect-[4/3] glass-panel rounded-3xl p-6 flex flex-col justify-between
+              group relative aspect-[4/3] glass-panel rounded-3xl p-5 md:p-6 flex flex-col justify-between
               transition-all duration-300 transform-gpu
               ${isEditing && !isSharedMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:-translate-y-1 hover:shadow-[0_10px_30px_-5px_rgba(16,185,129,0.15)]'}
               ${isDragged ? 'opacity-40 scale-[0.95] border-dashed border-white/30 grayscale' : ''}
@@ -1550,7 +1550,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
           >
             <div className="flex justify-between items-start">
               <div className={`p-3 rounded-2xl ${folder.type === 'private' ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'} group-hover:scale-110 transition-transform duration-500`}>
-                {folder.type === 'private' ? <Lock className="w-6 h-6" /> : <Folder className="w-6 h-6" />}
+                {folder.type === 'private' ? <Lock className="w-5 h-5 md:w-6 md:h-6" /> : <Folder className="w-5 h-5 md:w-6 md:h-6" />}
               </div>
               {isEditing && !isSharedMode && (
                 <div className="flex gap-1">
@@ -1572,7 +1572,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
             </div>
             
             <div>
-              <h3 className="text-white font-bold text-lg tracking-tight group-hover:text-emerald-300 transition-colors">{folder.name}</h3>
+              <h3 className="text-white font-bold text-base md:text-lg tracking-tight group-hover:text-emerald-300 transition-colors truncate">{folder.name}</h3>
               <p className="text-zinc-500 text-xs font-medium mt-1 truncate">{(folder.items || []).length} items</p>
             </div>
 
@@ -1593,7 +1593,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
       {folderModal.isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setFolderModal(prev => ({ ...prev, isOpen: false }))} />
-          <div className="relative w-full max-w-md glass-panel rounded-[2.5rem] p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
+          <div className="relative w-full max-w-md glass-panel rounded-[2.5rem] p-6 md:p-8 border border-white/10 shadow-2xl animate-in zoom-in-95">
              <h3 className="text-xl font-bold text-white mb-6">
                {folderModal.mode === 'create' ? 'New Vault Folder' : 'Edit Folder Settings'}
              </h3>
@@ -1743,18 +1743,18 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
                      <ArrowRight className="w-6 h-6 rotate-180" />
                   </button>
                   <div>
-                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                        {activeFolder.type === 'private' && <Lock className="w-5 h-5 text-red-400" />}
+                     <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
+                        {activeFolder.type === 'private' && <Lock className="w-4 h-4 md:w-5 md:h-5 text-red-400" />}
                         {activeFolder.name}
                      </h2>
                      <p className="text-zinc-400 text-xs font-medium">Vault Browser</p>
                   </div>
               </div>
 
-              <div className="flex items-center gap-4 relative z-10 w-full md:w-auto justify-end">
-                  {/* Search Bar */}
-                  <div className="flex-1 md:flex-none flex items-center bg-white/5 border border-white/10 rounded-full px-3 py-2 focus-within:bg-black/40 focus-within:border-emerald-500/50 transition-all max-w-xs">
-                    <Search className="w-4 h-4 text-zinc-500" />
+              <div className="flex items-center gap-2 md:gap-4 relative z-10 w-full md:w-auto justify-end">
+                  {/* Search Bar - Expandable on mobile */}
+                  <div className="flex-1 md:flex-none flex items-center bg-white/5 border border-white/10 rounded-full px-3 py-2 focus-within:bg-black/40 focus-within:border-emerald-500/50 transition-all w-full md:w-auto md:max-w-xs">
+                    <Search className="w-4 h-4 text-zinc-500 shrink-0" />
                     <input
                         type="text"
                         value={searchQuery}
@@ -1763,7 +1763,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
                         className="bg-transparent border-none focus:outline-none text-sm text-white placeholder:text-zinc-600 ml-2 w-full md:w-40"
                     />
                     {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="text-zinc-500 hover:text-white">
+                        <button onClick={() => setSearchQuery('')} className="text-zinc-500 hover:text-white shrink-0">
                             <X className="w-3 h-3" />
                         </button>
                     )}
@@ -1796,7 +1796,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
                             
                             <button 
                                 onClick={() => setIsAddingItem(true)}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-lg shadow-emerald-500/20 transition-all"
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-lg shadow-emerald-500/20 transition-all whitespace-nowrap"
                             >
                                 <Plus className="w-5 h-5" />
                                 <span className="hidden md:inline">Add Item</span>
@@ -1809,7 +1809,7 @@ export const VaultSection: React.FC<VaultSectionProps> = ({
 
            {/* Grid Content */}
            <div className="flex-1 overflow-y-auto p-4 md:p-8 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden relative z-10">
-              <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 auto-rows-[180px] gap-6 pb-20">
+              <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 auto-rows-[180px] gap-4 md:gap-6 pb-20">
                  {filteredItems?.map(block => (
                     <BentoItem 
                        key={block.id}

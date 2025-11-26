@@ -163,17 +163,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
       </nav>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-20 pb-32 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-16 lg:gap-24">
+      <section className="relative z-10 pt-16 md:pt-20 pb-20 md:pb-32 px-6">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-12 md:gap-16 lg:gap-24">
           
           {/* Hero Copy */}
-          <div className="flex-1 text-center md:text-left animate-in slide-in-from-bottom-8 fade-in duration-1000 fill-mode-forwards">
+          <div className="flex-1 text-center md:text-left animate-in slide-in-from-bottom-8 fade-in duration-1000 fill-mode-forwards w-full">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-emerald-300 text-[10px] font-bold tracking-[0.2em] uppercase mb-8 shadow-sm backdrop-blur-md">
               <Zap className="w-3 h-3 fill-current" />
               <span>v2.0 Now Live</span>
             </div>
             
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-8 leading-[1.1] text-white">
+            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-8 leading-[1.1] text-white">
               Your Digital <br className="hidden md:block"/>
               <WordRotator />
             </h1>
@@ -182,10 +182,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
               The intelligent personal hub builder. Drag, drop, and liquefy your online presence with AI-powered design and privacy-first vaults.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start w-full">
               <button 
                 onClick={onGetStarted}
-                className="group relative px-8 py-4 rounded-2xl bg-emerald-500 text-white font-bold text-lg overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] active:scale-95"
+                className="group relative px-8 py-4 rounded-2xl bg-emerald-500 text-white font-bold text-lg overflow-hidden transition-all hover:scale-[1.02] hover:shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] active:scale-95 w-full sm:w-auto"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-500 transition-opacity" />
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-spring" />
@@ -196,7 +196,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
               
               <button 
                 onClick={onLogin}
-                className="px-8 py-4 rounded-2xl bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-white font-bold text-lg transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 group"
+                className="px-8 py-4 rounded-2xl bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-white font-bold text-lg transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 group w-full sm:w-auto"
               >
                 <Play className="w-4 h-4 fill-zinc-400 text-zinc-400 group-hover:text-white group-hover:fill-white transition-colors" />
                 <span>Watch Demo</span>
@@ -337,9 +337,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
       </div>
 
       {/* Features - Bento Grid Style */}
-      <section className="py-32 px-6 relative z-10 border-t border-white/5 bg-[#09090b]/50 backdrop-blur-sm">
+      <section className="py-20 md:py-32 px-6 relative z-10 border-t border-white/5 bg-[#09090b]/50 backdrop-blur-sm">
          <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-20">
+            <div className="text-center mb-16 md:mb-20">
                <h2 className="text-4xl md:text-5xl font-bold mb-6">Built for the <span className="text-emerald-400">future</span>.</h2>
                <p className="text-zinc-400 max-w-2xl mx-auto text-lg">Every pixel is engineered to help you tell your story. Powerful enough for developers, simple enough for everyone.</p>
             </div>
@@ -347,7 +347,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 auto-rows-[280px]">
                
                {/* AI Magic - Large */}
-               <SpotlightCard className="md:col-span-2 row-span-2 glass-panel rounded-[2.5rem] border border-white/10 p-10 flex flex-col justify-between group bg-[#0c0c0e]">
+               <SpotlightCard className="md:col-span-2 row-span-2 glass-panel rounded-[2.5rem] border border-white/10 p-8 md:p-10 flex flex-col justify-between group bg-[#0c0c0e]">
                   <div className="space-y-4 relative z-10">
                      <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 group-hover:scale-110 transition-transform duration-500">
                         <Sparkles className="w-7 h-7 text-purple-400" />
@@ -460,7 +460,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
       </section>
 
       {/* CTA Section */}
-      <section className="py-32 px-6 relative z-10 overflow-hidden">
+      <section className="py-24 md:py-32 px-6 relative z-10 overflow-hidden">
           <div className="absolute inset-0 bg-emerald-900/10 radial-gradient-center" />
           <div className="max-w-4xl mx-auto text-center relative z-10">
               <h2 className="text-5xl md:text-7xl font-bold text-white mb-8 tracking-tight">
@@ -487,23 +487,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
       </section>
 
       {/* Premium Footer */}
-      <footer className="relative bg-[#020202] border-t border-white/5 pt-24 pb-12 overflow-hidden z-20">
+      <footer className="relative bg-[#020202] border-t border-white/5 pt-20 pb-12 overflow-hidden z-20">
         {/* Glow Effects */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-px bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent shadow-[0_0_80px_rgba(16,185,129,0.4)]" />
         <div className="absolute -top-[200px] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none mix-blend-screen" />
         
         <div className="max-w-7xl mx-auto px-6 relative z-10">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-16 mb-20">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10 lg:gap-16 mb-16">
             
             {/* Brand Column */}
-            <div className="md:col-span-5 space-y-6">
+            <div className="md:col-span-4 space-y-6">
               <div className="flex items-center gap-3 mb-2 select-none">
                 <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-xl flex items-center justify-center border border-white/5 shadow-inner">
                    <div className="w-6 h-6">
                        <Logo />
                    </div>
                 </div>
-                {/* Replaced with consistent header font style */}
                 <HeaderLogoText />
               </div>
               <p className="text-zinc-500 text-sm leading-relaxed max-w-sm">
@@ -519,31 +518,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
               </div>
             </div>
 
-            {/* Nav Columns */}
-            <div className="md:col-span-2 space-y-6">
-               <h4 className="text-white font-bold text-sm tracking-wider uppercase">Product</h4>
-               <ul className="space-y-4 text-sm text-zinc-500 font-medium">
-                  {['Features', 'Templates', 'Showcase', 'Pricing', 'Changelog'].map(item => (
-                    <li key={item}><a href="#" className="hover:text-emerald-400 transition-colors flex items-center gap-2 group">
-                       <span className="w-0 group-hover:w-2 h-px bg-emerald-500 transition-all" />
-                       {item}
-                    </a></li>
-                  ))}
-               </ul>
+            {/* Nav Columns - 2 col on mobile, spread on desktop */}
+            <div className="grid grid-cols-2 gap-8 md:col-span-5 md:flex md:justify-around">
+               <div className="space-y-6">
+                  <h4 className="text-white font-bold text-sm tracking-wider uppercase">Product</h4>
+                  <ul className="space-y-4 text-sm text-zinc-500 font-medium">
+                      {['Features', 'Templates', 'Showcase', 'Pricing', 'Changelog'].map(item => (
+                        <li key={item}><a href="#" className="hover:text-emerald-400 transition-colors flex items-center gap-2 group">
+                          <span className="w-0 group-hover:w-2 h-px bg-emerald-500 transition-all" />
+                          {item}
+                        </a></li>
+                      ))}
+                  </ul>
+               </div>
+
+               <div className="space-y-6">
+                  <h4 className="text-white font-bold text-sm tracking-wider uppercase">Resources</h4>
+                  <ul className="space-y-4 text-sm text-zinc-500 font-medium">
+                      {['Documentation', 'Community', 'Help Center', 'API Reference', 'Blog'].map(item => (
+                        <li key={item}><a href="#" className="hover:text-emerald-400 transition-colors flex items-center gap-2 group">
+                          <span className="w-0 group-hover:w-2 h-px bg-emerald-500 transition-all" />
+                          {item}
+                        </a></li>
+                      ))}
+                  </ul>
+               </div>
             </div>
 
-            <div className="md:col-span-2 space-y-6">
-               <h4 className="text-white font-bold text-sm tracking-wider uppercase">Resources</h4>
-               <ul className="space-y-4 text-sm text-zinc-500 font-medium">
-                  {['Documentation', 'Community', 'Help Center', 'API Reference', 'Blog'].map(item => (
-                    <li key={item}><a href="#" className="hover:text-emerald-400 transition-colors flex items-center gap-2 group">
-                       <span className="w-0 group-hover:w-2 h-px bg-emerald-500 transition-all" />
-                       {item}
-                    </a></li>
-                  ))}
-               </ul>
-            </div>
-
+             {/* Newsletter */}
              <div className="md:col-span-3 space-y-6">
                 <h4 className="text-white font-bold text-sm tracking-wider uppercase">Newsletter</h4>
                 <p className="text-xs text-zinc-500 leading-relaxed">
@@ -568,14 +570,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onLogin 
 
           {/* Bottom Bar */}
           <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-             <div className="flex flex-col md:flex-row items-center gap-2 md:gap-6 text-xs text-zinc-500 font-medium">
+             <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 text-xs text-zinc-500 font-medium order-2 md:order-1">
                  <span>&copy; 2025 Bloxm Inc.</span>
                  <span className="hidden md:block w-1 h-1 bg-zinc-700 rounded-full" />
-                 <a href="#" className="hover:text-zinc-300 transition-colors">Privacy Policy</a>
-                 <a href="#" className="hover:text-zinc-300 transition-colors">Terms of Service</a>
+                 <div className="flex gap-4">
+                    <a href="#" className="hover:text-zinc-300 transition-colors">Privacy Policy</a>
+                    <a href="#" className="hover:text-zinc-300 transition-colors">Terms of Service</a>
+                 </div>
              </div>
 
-             <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white/5 px-4 py-2 rounded-full border border-white/5 hover:border-white/10 transition-colors">
+             <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium bg-white/5 px-4 py-2 rounded-full border border-white/5 hover:border-white/10 transition-colors order-1 md:order-2">
                 <span>Crafted by</span>
                 <a href="#" className="text-zinc-300 hover:text-white transition-colors font-bold flex items-center gap-1.5">
                    Tharunkumar <Heart className="w-3 h-3 text-red-500/60 fill-current animate-pulse" />

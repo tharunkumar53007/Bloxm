@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { BentoItem } from './components/BentoItem';
 import { EditToolbar } from './components/EditToolbar';
@@ -12,7 +11,7 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { LogoutConfirmModal } from './components/LogoutConfirmModal';
 import { VaultSection } from './components/VaultSection';
 import { BlockData, BlockType, BlockSize, AuthState, ThemeConfig, VaultFolder } from './types';
-import { LogOut, Loader2 } from 'lucide-react';
+import { LogOut, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Logo } from './components/Logo';
 import { auth, onAuthStateChanged, logout, saveUserData, loadUserData } from './services/firebase';
 
@@ -59,7 +58,11 @@ const sanitizeForShare = (data: any): any => {
   if (typeof data === 'string') {
     // If string is a Base64 Image (starts with data:image), replace it
     if (data.startsWith('data:image')) {
-      return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop'; // Aesthetic abstract placeholder
+       // Only strip if it's reasonably large (> 500 chars). Small icons might be fine.
+       // Browser URLs can handle ~32KB+, but safer to be aggressive for sharing.
+       if (data.length > 500) {
+          return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1000&auto=format&fit=crop'; // Aesthetic abstract placeholder
+       }
     }
     return data;
   }
@@ -93,6 +96,7 @@ const App: React.FC = () => {
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<BlockData | null>(null); 
   const [vaultOpenId, setVaultOpenId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'warning' | 'error'} | null>(null);
   
   // Selection & Deletion State
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
@@ -103,6 +107,12 @@ const App: React.FC = () => {
   const [blocks, setBlocks] = useState<BlockData[]>(DEFAULT_BLOCKS);
   const [vaultFolders, setVaultFolders] = useState<VaultFolder[]>([]);
   const [theme, setTheme] = useState<ThemeConfig>(DEFAULT_THEME);
+
+  // Helper for toast
+  const showToast = useCallback((message: string, type: 'success' | 'warning' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
   // Firebase Auth Listener
   useEffect(() => {
@@ -223,9 +233,10 @@ const App: React.FC = () => {
         }
       } catch (error) {
         console.error("Failed to parse shared data", error);
+        showToast("Failed to load shared layout.", 'error');
       }
     }
-  }, []);
+  }, [showToast]);
 
   // Persistence Effect (Keyed by Email + Firestore Sync)
   useEffect(() => {
@@ -314,7 +325,11 @@ const App: React.FC = () => {
 
     // SANITIZE: Remove massive data:image strings to prevent URL overflow
     const sanitizedPayload = sanitizeForShare(payload);
-    const hasLocallyUploadedImages = JSON.stringify(payload).length !== JSON.stringify(sanitizedPayload).length;
+    
+    // Check if we actually stripped anything (simple length check comparison)
+    const originalLen = JSON.stringify(payload).length;
+    const sanitizedLen = JSON.stringify(sanitizedPayload).length;
+    const hasLocallyUploadedImages = originalLen !== sanitizedLen;
 
     try {
       // 1. Stringify & Compress
@@ -336,13 +351,13 @@ const App: React.FC = () => {
       await navigator.clipboard.writeText(url);
 
       if (hasLocallyUploadedImages) {
-        alert("Link copied! Note: Local images were replaced with placeholders to keep the link valid.");
+        showToast("Link copied! Large images were replaced with placeholders.", 'warning');
       } else {
-        alert("Link copied to clipboard!");
+        showToast("Share link copied to clipboard!", 'success');
       }
     } catch (err) {
       console.error("Failed to generate share link", err);
-      alert("Failed to generate link. Layout too complex.");
+      showToast("Failed to generate link. Layout too complex.", 'error');
     }
   };
 
@@ -672,6 +687,23 @@ const App: React.FC = () => {
           onBulkDelete={handleBulkDeleteTrigger}
           onBulkDuplicate={handleBulkDuplicate}
         />
+      )}
+
+      {/* Global Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[150] animate-in slide-in-from-bottom-5 fade-in duration-300">
+            <div className={`
+                px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border flex items-center gap-3 font-medium text-sm
+                ${toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/30' : 
+                  toast.type === 'warning' ? 'bg-amber-500/20 text-amber-200 border-amber-500/30' : 
+                  'bg-red-500/20 text-red-200 border-red-500/30'}
+            `}>
+                {toast.type === 'success' && <CheckCircle2 className="w-4 h-4" />}
+                {toast.type === 'warning' && <AlertTriangle className="w-4 h-4" />}
+                {toast.type === 'error' && <AlertTriangle className="w-4 h-4" />}
+                {toast.message}
+            </div>
+        </div>
       )}
 
       <AIGenerator 

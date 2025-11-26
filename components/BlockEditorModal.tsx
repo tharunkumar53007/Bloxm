@@ -482,9 +482,9 @@ export const BlockEditorModal: React.FC<BlockEditorModalProps> = ({ isOpen, onCl
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-300" onClick={onClose} />
       
-      <div className="relative w-full max-w-[440px] glass-panel rounded-[2rem] p-8 border border-white/10 shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-300 bg-[#09090b]/90 max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
+      <div className="relative w-full max-w-[440px] glass-panel rounded-[2rem] p-6 md:p-8 border border-white/10 shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-300 bg-[#09090b]/90 max-h-[90vh] overflow-y-auto custom-scrollbar flex flex-col">
         
-        <div className="flex justify-between items-center mb-8 sticky top-0 bg-[#09090b]/95 z-20 pb-4 border-b border-white/5 backdrop-blur-xl -mx-4 px-4 pt-2 -mt-2">
+        <div className="flex justify-between items-center mb-6 sticky top-0 bg-[#09090b]/95 z-20 pb-4 border-b border-white/5 backdrop-blur-xl -mx-4 px-4 pt-2 -mt-2">
           <h3 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
               {getModalTitle()}
           </h3>
@@ -502,7 +502,7 @@ export const BlockEditorModal: React.FC<BlockEditorModalProps> = ({ isOpen, onCl
             {block.type === 'text' && renderTextEditor()}
         </div>
 
-        <div className="mt-8 pt-6 border-t border-white/5 flex gap-4 sticky bottom-0 bg-[#09090b]/95 -mb-4 pb-4 z-20 backdrop-blur-xl">
+        <div className="mt-8 pt-6 border-t border-white/5 flex gap-4 sticky bottom-0 bg-[#09090b]/95 -mb-4 pb-4 z-20 backdrop-blur-xl -mx-4 px-4">
           <button 
             onClick={onClose}
             className="px-6 py-3.5 rounded-xl font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
